@@ -3,7 +3,6 @@ from typing import TypedDict, Literal, Sized
 from pathlib import Path
 from glob import glob
 from tifffile import imread as tiff_imread
-import os
 
 
 class MarsLS_Sample(TypedDict):
@@ -44,6 +43,7 @@ class MarsLS_Dataset(Sized, torch.utils.data.Dataset[MarsLS_Sample]):
 
         self._data_dir: Path = data_root / split
 
+        # Check if data directory exists
         if not (self._data_dir.is_dir() and self._data_dir.exists()):
             raise FileNotFoundError(
                 f"No directory exists at `{self._data_dir.as_posix()}`"
@@ -59,25 +59,31 @@ class MarsLS_Dataset(Sized, torch.utils.data.Dataset[MarsLS_Sample]):
         self._image_paths: list[str] = glob(image_path_pattern)
         self._label_paths: list[str] = glob(label_path_pattern)
 
+        # Labels exist? (False for "test" split)
         self._labels_exist: bool = len(self._label_paths) > 0
 
     def __len__(self) -> int:
         return len(self._image_paths)
 
     def __getitem__(self, index) -> MarsLS_Sample:
+        # Retrieve path from path list
         image_path: str = self._image_paths[index]
+
+        # Read image from path
         image: torch.Tensor = torch.from_numpy(tiff_imread(image_path)).permute(2, 0, 1)
 
+        # Retrieve the label (if exists)
         label: torch.Tensor | None = None
         if self._labels_exist:
             label_path: str = self._label_paths[index]
             label = torch.from_numpy(tiff_imread(label_path))
 
+        # Construct the sample
         return MarsLS_Sample(
             thermal_inertial=image[MarsLS_Dataset._THERMAL_INERTIAL_INDEX],
             dem=image[MarsLS_Dataset._DEM_INDEX],
             slope=image[MarsLS_Dataset._SLOPE_INDEX],
             gray=image[MarsLS_Dataset._GRAY_INDEX],
-            rgb=image[MarsLS_Dataset._RGB_INDEX, ...],
+            rgb=image[MarsLS_Dataset._RGB_INDEX],
             label=label,
         )
