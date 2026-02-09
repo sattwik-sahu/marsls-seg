@@ -1,0 +1,26 @@
+[project]
+name = "marsls-seg"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+authors = [{ name = "Sattwik Kumar Sahu", email = "sattwik21@iiserb.ac.in" }]
+requires-python = ">=3.13"
+dependencies = [
+    "imagecodecs>=2026.1.14",
+    "numpy>=2.4.2",
+    "tifffile>=2026.1.28",
+    "torch>=2.10.0",
+    "torchvision>=0.25.0",
+]
+
+[dependency-groups]
+dev = ["jupyter>=1.1.1", "marimo>=0.19.9", "pytest>=9.0.2", "ruff>=0.15.0"]
+plot = ["matplotlib>=3.10.8", "seaborn>=0.13.2"]
+
+
+[project.scripts]
+marsls-seg = "marsls_seg:main"
+
+[build-system]
+requires = ["uv_build>=0.9.5,<0.10.0"]
+build-backend = "uv_build"
