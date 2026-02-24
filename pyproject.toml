@@ -6,15 +6,26 @@ readme = "README.md"
 authors = [{ name = "Sattwik Kumar Sahu", email = "sattwik21@iiserb.ac.in" }]
 requires-python = ">=3.13"
 dependencies = [
+    "flash-attn>=2.8.3",
     "imagecodecs>=2026.1.14",
+    "marimo>=0.20.2",
     "numpy>=2.4.2",
     "tifffile>=2026.1.28",
+    "timm>=1.0.24",
     "torch>=2.10.0",
     "torchvision>=0.25.0",
+    "x-transformers>=2.16.1",
 ]
 
 [dependency-groups]
 dev = ["jupyter>=1.1.1", "marimo>=0.19.9", "pytest>=9.0.2", "ruff>=0.15.0"]
+train = [
+    "pyyaml>=6.0.3",
+    "rich>=14.3.3",
+    "scikit-learn>=1.8.0",
+    "typer>=0.24.1",
+    "wandb>=0.25.0",
+]
 plot = ["matplotlib>=3.10.8", "seaborn>=0.13.2"]
 
 

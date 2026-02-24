@@ -1,2 +1,5 @@
+from marsls_seg.utils.cli import app
+
+
 def main() -> None:
-    print("Hello from marsls-seg!")
+    app()

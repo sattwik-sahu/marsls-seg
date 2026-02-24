@@ -29,10 +29,10 @@ type _SplitName = Literal["train", "test", "val"]
 
 
 class MarsLS_Dataset(Sized, torch.utils.data.Dataset[MarsLS_Sample]):
-    _THERMAL_INERTIAL_INDEX: int = 0
-    _SLOPE_INDEX: int = 1
-    _DEM_INDEX: int = 2
-    _GRAY_INDEX: int = 3
+    _THERMAL_INERTIAL_INDEX: slice = slice(0, 1)
+    _SLOPE_INDEX: slice = slice(1, 2)
+    _DEM_INDEX: slice = slice(2, 3)
+    _GRAY_INDEX: slice = slice(3, 4)
     _RGB_INDEX: slice = slice(4, 7)
 
     _IMAGES_DIR: str = "images"

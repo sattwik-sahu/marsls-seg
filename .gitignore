@@ -177,3 +177,5 @@ pyrightconfig.json
 
 /data/
 /notebooks/
+/.vscode/
+/wandb/
