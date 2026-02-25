@@ -5,7 +5,6 @@ from typing import Literal
 import numpy as np
 import torch
 import yaml
-from typing_extensions import Annotated
 from matplotlib import pyplot as plt
 from sklearn.decomposition import PCA
 
@@ -99,9 +98,10 @@ def build_lr_scheduler(
             ),
             torch.optim.lr_scheduler.CosineAnnealingLR(
                 optimizer=optimizer,
-                eta_min=config["training"]["lr"]
-                * config["training"]["lr_scheduler"]["start_factor"],
-                T_max=config["n_epochs"]
+                # eta_min=config["training"]["lr"]
+                # * config["training"]["lr_scheduler"]["start_factor"],
+                eta_min=config["training"]["lr_scheduler"]["eta_min"],
+                T_max=config["training"]["n_epochs"]
                 - config["training"]["lr_scheduler"]["n_warmup_epochs"],
             ),
         ],
@@ -114,6 +114,8 @@ def log_latent_pca(
     sample_physics_image: torch.Tensor,
     vision_tokens: torch.Tensor,
     physics_tokens: torch.Tensor,
+    vision_pred_tokens: torch.Tensor,
+    physics_pred_tokens: torch.Tensor,
     config: dict,
 ):
     """
@@ -137,31 +139,38 @@ def log_latent_pca(
 
     vis_pca = get_pca_map(vision_tokens)
     phy_pca = get_pca_map(physics_tokens)
+    vis_pred_pca = get_pca_map(vision_pred_tokens)
+    phy_pred_pca = get_pca_map(physics_pred_tokens)
 
     # 2. Convert original image for plotting
     img_np = sample_vision_image.permute(1, 2, 0).cpu().numpy()
     img_np = (img_np - img_np.min()) / (img_np.max() - img_np.min())
 
     # 3. Create Figure
-    fig, axes = plt.subplots(nrows=2, ncols=3, figsize=(30, 20))
-    axes[0][0].imshow(img_np)
-    axes[0][0].set_title("RGB Image")
-    axes[0][1].imshow(vis_pca)
-    axes[0][1].set_title("Vision Latent PCA")
-    axes[0][2].imshow(phy_pca)
-    axes[0][2].set_title("Physics Latent PCA")
+    fig, axes = plt.subplots(nrows=2, ncols=4, figsize=(12, 8))
+    axes[0][0].imshow(vis_pca)
+    axes[0][0].set_title("Vision Latent PCA")
+    axes[0][1].imshow(phy_pca)
+    axes[0][1].set_title("Physics Latent PCA")
+    axes[0][2].imshow(vis_pred_pca)
+    axes[0][2].set_title("Vision Latent Prediction PCA")
+    axes[0][3].imshow(phy_pred_pca)
+    axes[0][3].set_title("Physics Latent Prediction PCA")
 
+    axes[1][0].imshow(img_np)
+    axes[1][0].set_title("RGB Image")
     for i in range(sample_physics_image.shape[0]):
-        axes[1][i].imshow(sample_physics_image[i].cpu().numpy(), cmap="inferno")
-        axes[1][i].set_title(
+        axes[1][i + 1].imshow(sample_physics_image[i].cpu().numpy(), cmap="inferno")
+        axes[1][i + 1].set_title(
             config["model"]["physics"]["encoder"]["feature_layers"][i]["name"]
             .replace("_", " ")
-            .capitalize()
+            .upper()
         )
 
     for ax in axes:
         for ax_ in ax:
             ax_.axis("off")
+    plt.tight_layout()
 
     # 4. Log to WandB
     wandb.log({"val/latents": wandb.Image(fig)})
@@ -170,10 +179,13 @@ def log_latent_pca(
 
 def train(config_path: Path):
     config: dict = parse_config(config_file=config_path)
+    training_config: dict = config["training"]
+    data_config: dict = config["data"]
 
     # Load data
     train_loader, val_loader, test_loader = create_dataloaders(
-        data_root=Path(config["data"]["root_dir"]), batch_size=config["batch_size"]
+        data_root=Path(data_config["root_dir"]),
+        batch_size=training_config["batch_size"],
     )
 
     # Create models
@@ -192,23 +204,23 @@ def train(config_path: Path):
         params=[
             {
                 "params": vision_encoder.parameters(),
-                "lr": config["training"]["lr"],
-                "weight_decay": 0.05,
+                "lr": training_config["vision"]["encoder"]["lr"],
+                "weight_decay": training_config["vision"]["encoder"]["weight_decay"],
             },
             {
                 "params": physics_encoder.parameters(),
-                "lr": config["training"]["lr"],
-                "weight_decay": 0.05,
+                "lr": training_config["physics"]["encoder"]["lr"],
+                "weight_decay": training_config["physics"]["encoder"]["weight_decay"],
             },
             {
                 "params": vision_predictor.parameters(),
-                "lr": config["training"]["lr"],
-                "weight_decay": 0.001,
+                "lr": training_config["vision"]["predictor"]["lr"],
+                "weight_decay": training_config["vision"]["predictor"]["weight_decay"],
             },
             {
                 "params": physics_predictor.parameters(),
-                "lr": config["training"]["lr"],
-                "weight_decay": 0.001,
+                "lr": training_config["physics"]["predictor"]["lr"],
+                "weight_decay": training_config["physics"]["predictor"]["weight_decay"],
             },
         ]
     )
@@ -223,7 +235,7 @@ def train(config_path: Path):
 
     # Start training
     batch: MarsLS_Sample
-    for epoch in range(config["n_epochs"]):
+    for epoch in range(training_config["n_epochs"]):
         mask_ratio: float = (
             config["training"]["mask_ratio"]["start"]
             + epoch
@@ -231,7 +243,7 @@ def train(config_path: Path):
                 config["training"]["mask_ratio"]["end"]
                 - config["training"]["mask_ratio"]["start"]
             )
-            / config["n_epochs"]
+            / training_config["n_epochs"]
         )
 
         for batch in train_loader:
@@ -253,7 +265,7 @@ def train(config_path: Path):
 
             # Input preparation
             n_tokens: int = int(
-                (config["data"]["image_size"] // config["model"]["patch_size"]) ** 2
+                (data_config["image_size"] // config["model"]["patch_size"]) ** 2
             )
             mask: Mask = generate_mask(n_tokens=n_tokens, mask_ratio=mask_ratio)
 
@@ -264,17 +276,18 @@ def train(config_path: Path):
                 sx_vision: torch.Tensor = physics_encoder(physics_image, mask=mask)
                 sx_physics: torch.Tensor = vision_encoder(vision_image, mask=mask)
 
+                # Do not detach z
                 z_vision: torch.Tensor = vision_encoder._pos_emb.repeat(
-                    config["batch_size"], 1, 1
+                    training_config["batch_size"], 1, 1
                 )
                 z_physics: torch.Tensor = physics_encoder._pos_emb.repeat(
-                    config["batch_size"], 1, 1
+                    training_config["batch_size"], 1, 1
                 )
 
-                _, sx_hat_vision = apply_mask(
+                _, sy_hat_vision = apply_mask(
                     vision_predictor(sx=sx_vision, z=z_vision), mask=mask
                 )
-                _, sx_hat_physics = apply_mask(
+                _, sy_hat_physics = apply_mask(
                     physics_predictor(sx=sx_physics, z=z_physics), mask=mask
                 )
 
@@ -287,40 +300,34 @@ def train(config_path: Path):
 
                 # Calculate losses
                 loss_jepa_vision = torch.nn.functional.mse_loss(
-                    sx_hat_vision, sy_vision
+                    sy_hat_vision, sy_vision
                 )
                 loss_jepa_physics = torch.nn.functional.mse_loss(
-                    sx_hat_physics, sy_physics
+                    sy_hat_physics, sy_physics
                 )
+                loss_jepa = 0.5 * (loss_jepa_vision + loss_jepa_physics)
 
                 loss_sigreg_vision = sigreg(sx_vision.transpose(0, 1))
                 loss_sigreg_physics = sigreg(sx_physics.transpose(0, 1))
+                loss_sigreg = 0.5 * (loss_sigreg_vision + loss_jepa_physics)
 
-                loss_vision = (
-                    1 - config["training"]["lambda"]
-                ) * loss_jepa_vision + config["training"]["lambda"] * loss_sigreg_vision
-                loss_physics = (
-                    1 - config["training"]["lambda"]
-                ) * loss_jepa_physics + config["training"][
-                    "lambda"
-                ] * loss_sigreg_physics
-
-                loss = 0.5 * (loss_vision + loss_physics)
+                lambd = training_config["lambda"]
+                loss = (1 - lambd) * loss_jepa + lambd * loss_sigreg
 
             loss.backward()
 
             grad_norm: float = 0
             grad_norm += torch.nn.utils.clip_grad_norm_(
-                physics_encoder.parameters(), config["training"]["grad_clip_norm"]
+                physics_encoder.parameters(), training_config["grad_clip_norm"]
             ).item()
             grad_norm += torch.nn.utils.clip_grad_norm_(
-                physics_predictor.parameters(), config["training"]["grad_clip_norm"]
+                physics_predictor.parameters(), training_config["grad_clip_norm"]
             ).item()
             grad_norm += torch.nn.utils.clip_grad_norm_(
-                vision_encoder.parameters(), config["training"]["grad_clip_norm"]
+                vision_encoder.parameters(), training_config["grad_clip_norm"]
             ).item()
             grad_norm += torch.nn.utils.clip_grad_norm_(
-                vision_encoder.parameters(), config["training"]["grad_clip_norm"]
+                vision_encoder.parameters(), training_config["grad_clip_norm"]
             ).item()
             grad_norm /= 4
             optimizer.step()
@@ -345,7 +352,7 @@ def train(config_path: Path):
             # 1. Grab a single validation sample
             val_batch = next(iter(val_loader))
 
-            # Use your group_channels helper
+            # Use your group_channels helper   gggg
             v_img: torch.Tensor = group_channels(
                 sample=val_batch,
                 channel_names=[
@@ -363,16 +370,26 @@ def train(config_path: Path):
 
             # 2. Get full latent maps (no masking)
             # We use batch[0] to only look at the first image in the batch
-            z_vis = vision_encoder(v_img[0:1])  # [1, 256, D]
-            z_phy = physics_encoder(p_img[0:1])  # [1, 256, D]
+            sx_vis = vision_encoder(v_img[0:1])  # [1, 256, D]
+            sx_phy = physics_encoder(p_img[0:1])  # [1, 256, D]
+            z_vision: torch.Tensor = vision_encoder._pos_emb.repeat(
+                sx_vis.shape[0], 1, 1
+            ).detach()
+            z_physics: torch.Tensor = physics_encoder._pos_emb.repeat(
+                sx_phy.shape[0], 1, 1
+            ).detach()
+            sy_hat_vis = vision_predictor(sx=sx_vis, z=z_vision)
+            sy_hat_phy = vision_predictor(sx=sx_phy, z=z_physics)
 
             # 3. Log the PCA
             # We pass v_img[0][:3] assuming the first 3 channels are RGB
             log_latent_pca(
                 sample_vision_image=v_img[0][:3],
                 sample_physics_image=p_img[0],
-                vision_tokens=z_vis[0],
-                physics_tokens=z_phy[0],
+                vision_tokens=sx_vis[0],
+                physics_tokens=sx_phy[0],
+                vision_pred_tokens=sy_hat_vis[0],
+                physics_pred_tokens=sy_hat_phy[0],
                 config=config,
             )
 

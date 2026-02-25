@@ -1,9 +1,10 @@
 from typing import override
 
 import torch
-from x_transformers import Encoder, ContinuousTransformerWrapper
+from x_transformers import ContinuousTransformerWrapper, Encoder
+
 from marsls_seg.utils.models.ms_jepa.tokenizer import PatchTokenizer
-from marsls_seg.utils.modules.masking import apply_mask, Mask
+from marsls_seg.utils.modules.masking import Mask, apply_mask
 
 
 class VisionTransformer(torch.nn.Module):
