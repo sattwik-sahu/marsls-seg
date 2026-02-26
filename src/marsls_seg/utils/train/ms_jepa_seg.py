@@ -18,7 +18,7 @@ from marsls_seg.utils.models.ms_jepa.segmentation import (
     SegmentationHead,
 )
 from marsls_seg.utils.models.ms_jepa.sigreg import SIGReg
-from marsls_seg.utils.models.ms_jepa.vit import VisionTransformer
+from marsls_seg.utils.models.ms_jepa.encoder import MultispectralJEPAEncoder
 from marsls_seg.utils.modules.masking import Mask, apply_mask, generate_mask
 from marsls_seg.utils.train.ms_jepa import (
     build_encoder_predictor,
@@ -38,7 +38,7 @@ def load_config(weights_dir: Path) -> dict:
 
 def load_encoders(
     weights_dir: Path, config: dict
-) -> tuple[VisionTransformer, VisionTransformer]:
+) -> tuple[MultispectralJEPAEncoder, MultispectralJEPAEncoder]:
     vision_encoder, _ = build_encoder_predictor(
         config=config, device=DEVICE, model_name="vision"
     )

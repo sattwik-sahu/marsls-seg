@@ -1,7 +1,7 @@
 import torch
 import pytest
 from marsls_seg.utils.modules.masking import generate_mask
-from marsls_seg.utils.models.ms_jepa.vit import VisionTransformer
+from marsls_seg.utils.models.ms_jepa.encoder import MultispectralJEPAEncoder
 
 
 @pytest.fixture
@@ -19,7 +19,7 @@ def vit_config():
 def test_vit_forward_full(vit_config):
     """Test encoding a full image (no masking)."""
     device = "cuda" if torch.cuda.is_available() else "cpu"
-    model = VisionTransformer(**vit_config).to(device)
+    model = MultispectralJEPAEncoder(**vit_config).to(device)
 
     # Batch of 2 images
     x = torch.randn(2, 4, 128, 128).to(device)
@@ -34,7 +34,7 @@ def test_vit_forward_full(vit_config):
 def test_vit_forward_masked(vit_config):
     """Test encoding only the visible tokens using a mask."""
     device = "cuda" if torch.cuda.is_available() else "cpu"
-    model = VisionTransformer(**vit_config).to(device)
+    model = MultispectralJEPAEncoder(**vit_config).to(device)
 
     n_tokens = (vit_config["image_size"] // vit_config["patch_size"]) ** 2
     ratio = 0.6
@@ -52,7 +52,7 @@ def test_vit_forward_masked(vit_config):
 
 def test_vit_gradient_flow(vit_config):
     """Ensure gradients flow back to the patch tokenizer."""
-    model = VisionTransformer(**vit_config)
+    model = MultispectralJEPAEncoder(**vit_config)
     x = torch.randn(1, 4, 128, 128)
 
     out = model(x)
@@ -68,7 +68,7 @@ def test_vit_gradient_flow(vit_config):
 @pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA required")
 def test_vit_device_consistency(vit_config):
     """Verify the model works on GPU with masking."""
-    model = VisionTransformer(**vit_config).cuda()
+    model = MultispectralJEPAEncoder(**vit_config).cuda()
     x = torch.randn(1, 4, 128, 128).cuda()
 
     n_tokens = (vit_config["image_size"] // vit_config["patch_size"]) ** 2
