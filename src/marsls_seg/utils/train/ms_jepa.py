@@ -291,10 +291,10 @@ def train(config_path: Path):
                     physics_predictor(sx=sx_physics, z=z_physics), mask=mask
                 )
 
-                _, sy_vision = apply_mask(
+                _, sy_physics = apply_mask(
                     vision_encoder(vision_image).detach(), mask=mask
                 )
-                _, sy_physics = apply_mask(
+                _, sy_vision = apply_mask(
                     physics_encoder(physics_image).detach(), mask=mask
                 )
 
