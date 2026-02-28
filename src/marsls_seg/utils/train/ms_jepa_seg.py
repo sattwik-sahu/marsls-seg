@@ -12,49 +12,31 @@ import wandb
 from marsls_seg.helpers.device import DEVICE
 from marsls_seg.helpers.timestamp import get_timestamp_now
 from marsls_seg.utils.data.marsls import MarsLS_Dataset, MarsLS_Sample
-from marsls_seg.utils.models.ms_jepa.predictor import MultispectralJEPAPredictor
-from marsls_seg.utils.models.ms_jepa.segmentation import (
-    MLPFeatureFusion,
-    SegmentationHead,
-)
-from marsls_seg.utils.models.ms_jepa.sigreg import SIGReg
+from marsls_seg.utils.models.ms_jepa import MultispectralJEPAEncoderOutput, load_ms_jepa
 from marsls_seg.utils.models.ms_jepa.encoder import MultispectralJEPAEncoder
+from marsls_seg.utils.models.ms_jepa.predictor import MultispectralJEPAPredictor
+from marsls_seg.utils.models.ms_jepa.sigreg import SIGReg
+from marsls_seg.utils.modules.loss import LogCoshDiceLoss
 from marsls_seg.utils.modules.masking import Mask, apply_mask, generate_mask
-from marsls_seg.utils.train.ms_jepa import (
-    build_encoder_predictor,
+from marsls_seg.utils.modules.segmentation.atrous_conv import (
+    AtrousConvolutionSegHead,
+)
+from marsls_seg.utils.modules.segmentation.base import (
+    BaseSegmentationHead as SegmentationHead,
+)
+from marsls_seg.utils.modules.segmentation.probe import LinearProbeSegmentationHead
+from marsls_seg.utils.train.ms_jepa_sw import (
+    create_dataloaders,
     group_channels,
     parse_config,
-    create_dataloaders,
     preprocess_batch,
 )
-from marsls_seg.utils.modules.loss import LogCoshDiceLoss
 
 
 def load_config(weights_dir: Path) -> dict:
     config_file: Path = weights_dir / "config.yaml"
     config: dict = parse_config(config_file=config_file)
     return config
-
-
-def load_encoders(
-    weights_dir: Path, config: dict
-) -> tuple[MultispectralJEPAEncoder, MultispectralJEPAEncoder]:
-    vision_encoder, _ = build_encoder_predictor(
-        config=config, device=DEVICE, model_name="vision"
-    )
-    physics_encoder, _ = build_encoder_predictor(
-        config=config, device=DEVICE, model_name="physics"
-    )
-
-    # Load pre-trained weights
-    vision_encoder.load_state_dict(
-        torch.load(weights_dir / "vision_encoder.pt", weights_only=True)
-    )
-    physics_encoder.load_state_dict(
-        torch.load(weights_dir / "physics_encoder.pt", weights_only=True)
-    )
-
-    return vision_encoder.eval(), physics_encoder.eval()
 
 
 def get_inputs(sample: MarsLS_Sample) -> tuple[torch.Tensor, torch.Tensor]:
@@ -65,40 +47,42 @@ def get_inputs(sample: MarsLS_Sample) -> tuple[torch.Tensor, torch.Tensor]:
     return vision_input, physics_input
 
 
-def build_segmentation_modules(
+def build_segmentation_module(
     config: dict,
-) -> tuple[MLPFeatureFusion, SegmentationHead]:
-    fusion = MLPFeatureFusion(
-        dim_embed=config["model"]["dim"],
-        # image_size=config["data"]["image_size"],
-        # n_heads=8,
-        # patch_size=config["model"]["patch_size"],
-    ).to(device=DEVICE)
-
-    segmentation = SegmentationHead(dim_embed=config["model"]["dim"]).to(device=DEVICE)
-    return fusion, segmentation
+) -> SegmentationHead:
+    # return ConvSegmentationDecoder(
+    #     image_size=config["data"]["image_size"],
+    #     patch_size=config["model"]["patch_size"],
+    #     dim_embed=config["model"]["dim"],
+    #     base_channels=768,
+    # ).to(device=DEVICE)
+    return AtrousConvolutionSegHead(dim_embed=config["model"]["dim"], n_classes=1)
+    # return LinearProbeSegmentationHead(
+    #     dim_embed=config["model"]["dim"],
+    #     image_size=config["data"]["image_size"],
+    #     patch_size=config["model"]["patch_size"],
+    #     n_classes=1,
+    # ).to(device=DEVICE)
 
 
 def train(weights_dir: Path) -> None:
-    config: dict = load_config(weights_dir=weights_dir)
+    ms_jepa = load_ms_jepa(dir_path=weights_dir, device=DEVICE)
+    config: dict = ms_jepa["config"]
 
     # Initialize WandB
     wandb.init(project="MarsLS-JEPA", config=config)
 
-    vision_encoder, physics_encoder = load_encoders(
-        config=config, weights_dir=weights_dir
-    )
-    fusion, segmentation = build_segmentation_modules(config=config)
+    encoder = ms_jepa["encoder"]
+    segmentation = build_segmentation_module(config=config).to(device=DEVICE)
 
     train_loader, val_loader, _ = create_dataloaders(
-        data_root=Path(config["data"]["root_dir"]), batch_size=196
+        data_root=Path(config["data"]["root_dir"]), batch_size=64
     )
 
     # 1. Lower the Learning Rates
     optimizer = torch.optim.AdamW(
         [
-            {"params": fusion.parameters(), "lr": 3e-5, "weight_decay": 0.5},
-            {"params": segmentation.parameters(), "lr": 1e-4, "weight_decay": 0.5},
+            {"params": segmentation.parameters(), "lr": 1e-4, "weight_decay": 0.02},
         ]
     )
 
@@ -112,41 +96,39 @@ def train(weights_dir: Path) -> None:
     bce_loss_fn = torch.nn.BCEWithLogitsLoss()
 
     for epoch in range(15_000):
-        fusion.train()
         segmentation.train()
         epoch_train_losses = []
 
         for batch in train_loader:
             optimizer.zero_grad()
             batch = preprocess_batch(batch=batch, config=config)
-            vision_input, physics_input = get_inputs(sample=batch)
+            vision_image, physics_image = get_inputs(sample=batch)
             label = batch["label"].unsqueeze(1).to(device=DEVICE, dtype=torch.float32)
 
-            with torch.autocast(device_type=DEVICE.type, dtype=torch.bfloat16):
-                with torch.no_grad():
-                    v_tokens = vision_encoder(vision_input.to(DEVICE))
-                    p_tokens = physics_encoder(physics_input.to(DEVICE))
-                logits = segmentation(
-                    fusion(vision_tokens=v_tokens, physics_tokens=p_tokens)
+            # with torch.autocast(device_type=DEVICE.type, dtype=torch.bfloat16):
+            with torch.no_grad():
+                outputs: MultispectralJEPAEncoderOutput = encoder(
+                    vision_image=vision_image.to(device=DEVICE),
+                    physics_image=physics_image.to(device=DEVICE),
                 )
+                v_tokens = outputs["vision_encoding"]
+                p_tokens = outputs["physics_encoding"]
+            logits = segmentation(vision_encodings=v_tokens, physics_encodings=p_tokens)
 
-                # Hybrid Loss Calculation
-                loss_dice = dice_loss_fn(logits, label)
-                loss_bce = bce_loss_fn(logits, label)
-                total_loss = loss_dice + loss_bce
+            # Hybrid Loss Calculation
+            loss_dice = dice_loss_fn(logits, label)
+            loss_bce = bce_loss_fn(logits, label)
+            total_loss = loss_dice + loss_bce
 
             total_loss.backward()
-            torch.nn.utils.clip_grad_norm_(fusion.parameters(), max_norm=1.0)
             torch.nn.utils.clip_grad_norm_(segmentation.parameters(), max_norm=1.0)
             optimizer.step()
             epoch_train_losses.append(total_loss.item())
 
         # Validation Step
         avg_val_loss, avg_val_iou, val_sample = validate(
-            fusion,
             segmentation,
-            vision_encoder,
-            physics_encoder,
+            encoder,
             val_loader,
             dice_loss_fn,
             bce_loss_fn,
@@ -182,8 +164,7 @@ def calculate_iou(preds: torch.Tensor, labels: torch.Tensor, threshold: float = 
     return iou.mean()
 
 
-def validate(fusion, segmentation, v_enc, p_enc, loader, d_fn, b_fn, config):
-    fusion.eval()
+def validate(segmentation, encoder, loader, d_fn, b_fn, config):
     segmentation.eval()
     val_losses = []
     val_ious = []
@@ -196,9 +177,13 @@ def validate(fusion, segmentation, v_enc, p_enc, loader, d_fn, b_fn, config):
             label = batch["label"].unsqueeze(1).to(DEVICE, dtype=torch.float32)
 
             # Forward pass
-            v_tokens = v_enc(v_in.to(DEVICE))
-            p_tokens = p_enc(p_in.to(DEVICE))
-            logits = segmentation(fusion(v_tokens, p_tokens))
+            output: MultispectralJEPAEncoderOutput = encoder(
+                vision_image=v_in.to(device=DEVICE),
+                physics_image=p_in.to(device=DEVICE),
+            )
+            v_tokens = output["vision_encoding"]
+            p_tokens = output["physics_encoding"]
+            logits = segmentation(vision_encodings=v_tokens, physics_encodings=p_tokens)
 
             # Metrics
             loss = d_fn(logits, label) + b_fn(logits, label)
@@ -242,7 +227,12 @@ def validate(fusion, segmentation, v_enc, p_enc, loader, d_fn, b_fn, config):
 
 
 def main():
-    train(weights_dir=Path("data/runs/ms-jepa/20260224-135544"))
+    # train(weights_dir=Path("data/runs/ms-jepa/20260224-135544"))
+    train(
+        weights_dir=Path(
+            "/mnt/toshiba_hdd/code/robot-navigation/marsls-seg/data/runs/ms-jepa-sw/20260226-220808"
+        )
+    )
 
 
 if __name__ == "__main__":
