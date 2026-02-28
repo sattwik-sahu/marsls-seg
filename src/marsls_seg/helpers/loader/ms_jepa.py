@@ -6,7 +6,7 @@ from marsls_seg.utils.models.ms_jepa.predictor import (
 import yaml
 from pathlib import Path
 from typing import TypedDict
-from marsls_seg.utils.models.ms_jepa.build import build_encoder_predictor
+from marsls_seg.utils.models.ms_jepa._utils import build_encoder_predictor
 
 
 class MultispectralJEPAModels(TypedDict):
