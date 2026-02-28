@@ -4,7 +4,7 @@ import torch
 from marsls_seg.utils.modules.decoder import Decoder
 
 
-class Predictor(torch.nn.Module):
+class MultispectralJEPAPredictor(torch.nn.Module):
     def __init__(
         self,
         dim_embed: int,

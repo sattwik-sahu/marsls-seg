@@ -12,7 +12,7 @@ import wandb
 from marsls_seg.helpers.device import DEVICE
 from marsls_seg.helpers.timestamp import get_timestamp_now
 from marsls_seg.utils.data.marsls import MarsLS_Dataset, MarsLS_Sample
-from marsls_seg.utils.models.ms_jepa.predictor import Predictor
+from marsls_seg.utils.models.ms_jepa.predictor import MultispectralJEPAPredictor
 from marsls_seg.utils.models.ms_jepa.sigreg import SIGReg
 from marsls_seg.utils.models.ms_jepa.encoder import MultispectralJEPAEncoder
 from marsls_seg.utils.modules.masking import Mask, apply_mask, generate_mask
@@ -58,7 +58,7 @@ def preprocess_batch(batch: MarsLS_Sample, config: dict) -> MarsLS_Sample:
 
 def build_encoder_predictor(
     model_name: Literal["vision", "physics"], config: dict, device: torch.device
-) -> tuple[MultispectralJEPAEncoder, Predictor]:
+) -> tuple[MultispectralJEPAEncoder, MultispectralJEPAPredictor]:
     encoder: MultispectralJEPAEncoder = MultispectralJEPAEncoder(
         image_size=config["data"]["image_size"],
         patch_size=config["model"]["patch_size"],
@@ -70,7 +70,7 @@ def build_encoder_predictor(
         n_heads=config["model"][model_name]["encoder"]["n_heads"],
         n_layers=config["model"][model_name]["encoder"]["n_layers"],
     ).to(device=device)
-    predictor: Predictor = Predictor(
+    predictor: MultispectralJEPAPredictor = MultispectralJEPAPredictor(
         dim_embed=config["model"]["dim"],
         image_size=config["data"]["image_size"],
         patch_size=config["model"]["patch_size"],

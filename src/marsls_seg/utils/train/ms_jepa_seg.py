@@ -12,7 +12,7 @@ import wandb
 from marsls_seg.helpers.device import DEVICE
 from marsls_seg.helpers.timestamp import get_timestamp_now
 from marsls_seg.utils.data.marsls import MarsLS_Dataset, MarsLS_Sample
-from marsls_seg.utils.models.ms_jepa.predictor import Predictor
+from marsls_seg.utils.models.ms_jepa.predictor import MultispectralJEPAPredictor
 from marsls_seg.utils.models.ms_jepa.segmentation import (
     MLPFeatureFusion,
     SegmentationHead,

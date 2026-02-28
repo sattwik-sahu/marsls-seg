@@ -1,6 +1,6 @@
 import torch
 import pytest
-from marsls_seg.utils.models.ms_jepa.predictor import Predictor
+from marsls_seg.utils.models.ms_jepa.predictor import MultispectralJEPAPredictor
 from marsls_seg.utils.modules.decoder import Decoder, DecoderLayer
 
 @pytest.fixture
@@ -28,7 +28,7 @@ def test_decoder_layer_shapes(model_params):
 
 def test_predictor_forward_logic(model_params):
     """Test full Predictor integration with realistic JEPA sizes."""
-    predictor = Predictor(**model_params)
+    predictor = MultispectralJEPAPredictor(**model_params)
     
     B = 4
     n_visible = 100
@@ -47,7 +47,7 @@ def test_predictor_non_causality(model_params):
     CRITICAL TEST: Ensure the first predicted token 
     can see the last context token (Non-causal).
     """
-    predictor = Predictor(**model_params)
+    predictor = MultispectralJEPAPredictor(**model_params)
     D = model_params["dim_embed"]
     
     z = torch.randn(1, 5, D)

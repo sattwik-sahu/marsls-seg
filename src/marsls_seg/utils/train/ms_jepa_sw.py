@@ -12,7 +12,7 @@ import wandb
 from marsls_seg.helpers.device import DEVICE
 from marsls_seg.helpers.timestamp import get_timestamp_now
 from marsls_seg.utils.data.marsls import MarsLS_Dataset, MarsLS_Sample
-from marsls_seg.utils.models.ms_jepa.predictor import Predictor
+from marsls_seg.utils.models.ms_jepa.predictor import MultispectralJEPAPredictor
 from marsls_seg.utils.models.ms_jepa.sigreg import SIGReg
 from marsls_seg.utils.models.ms_jepa.encoder import (
     MultispectralJEPAEncoder,
@@ -61,7 +61,7 @@ def preprocess_batch(batch: MarsLS_Sample, config: dict) -> MarsLS_Sample:
 
 def build_encoder_predictor(
     config: dict, device: torch.device
-) -> tuple[MultispectralJEPAEncoder, Predictor]:
+) -> tuple[MultispectralJEPAEncoder, MultispectralJEPAPredictor]:
     encoder: MultispectralJEPAEncoder = MultispectralJEPAEncoder(
         image_size=config["data"]["image_size"],
         patch_size=config["model"]["patch_size"],
@@ -76,7 +76,7 @@ def build_encoder_predictor(
         n_heads=config["model"]["encoder"]["n_heads"],
         n_layers=config["model"]["encoder"]["n_layers"],
     ).to(device=device)
-    predictor: Predictor = Predictor(
+    predictor: MultispectralJEPAPredictor = MultispectralJEPAPredictor(
         dim_embed=config["model"]["dim"],
         image_size=config["data"]["image_size"],
         patch_size=config["model"]["patch_size"],
@@ -168,7 +168,7 @@ def log_latent_pca(
     for i in range(sample_physics_image.shape[0]):
         axes[1][i + 1].imshow(sample_physics_image[i].cpu().numpy(), cmap="inferno")
         axes[1][i + 1].set_title(
-            config["model"]["physics"]["encoder"]["feature_layers"][i]["name"]
+            config["model"]["feature_layers"]["physics"][i]["name"]
             .replace("_", " ")
             .upper()
         )
@@ -269,15 +269,19 @@ def train(config_path: Path):
                 sx_vision: torch.Tensor = encoding["vision_encoding"]
                 sx_physics: torch.Tensor = encoding["physics_encoding"]
 
-                z_vision: torch.Tensor = encoder._vision_pos_emb.repeat(
-                    training_config["batch_size"], 1, 1
+                _, z_vision = apply_mask(
+                    encoder._vision_pos_emb.repeat(training_config["batch_size"], 1, 1),
+                    mask=mask,
                 )
-                z_physics: torch.Tensor = encoder._physics_pos_emb.repeat(
-                    training_config["batch_size"], 1, 1
+                _, z_physics = apply_mask(
+                    encoder._physics_pos_emb.repeat(
+                        training_config["batch_size"], 1, 1
+                    ),
+                    mask=mask,
                 )
 
-                sx = torch.cat([sx_vision, sx_vision, sx_physics, sx_physics], dim=0)
-                z = torch.cat([z_vision, z_physics, z_vision, z_physics], dim=0)
+                sx = torch.cat([sx_vision, sx_physics], dim=0)
+                z = torch.cat([z_physics, z_vision], dim=0)
                 sy_hat = predictor(sx=sx, z=z)
 
                 with torch.no_grad():
@@ -288,15 +292,12 @@ def train(config_path: Path):
                         sy_["vision_encoding"],
                         sy_["physics_encoding"],
                     )
-                    sy = torch.cat(
-                        [sy_vision, sy_physics, sy_vision, sy_physics], dim=0
+                    _, sy = apply_mask(
+                        torch.cat([sy_physics, sy_vision], dim=0), mask=mask
                     )
 
                 # Calculate losses
-                loss_jepa = torch.nn.functional.mse_loss(
-                    apply_mask(sy_hat, mask=mask)[1],
-                    apply_mask(sy, mask=mask)[1].detach(),
-                )
+                loss_jepa = torch.nn.functional.mse_loss(sy_hat, sy.detach())
                 loss_sigreg = sigreg(sx.transpose(0, 1))
 
                 lambd = training_config["lambda"]
@@ -327,56 +328,63 @@ def train(config_path: Path):
                 }
             )
 
-        # encoder.eval()
-        # with torch.no_grad():
-        #     # 1. Grab a single validation sample
-        #     val_batch = next(iter(val_loader))
+        encoder.eval()
+        predictor.eval()
+        with torch.no_grad():
+            # 1. Grab a single validation sample
+            val_batch = next(iter(val_loader))
 
-        #     # Use your group_channels helper   gggg
-        #     v_img: torch.Tensor = group_channels(
-        #         sample=val_batch,
-        #         channel_names=[
-        #             layer["name"]
-        #             for layer in config["model"]["vision"]["encoder"]["feature_layers"]
-        #         ],
-        #     ).to(device=DEVICE)
-        #     p_img: torch.Tensor = group_channels(
-        #         sample=val_batch,
-        #         channel_names=[
-        #             layer["name"]
-        #             for layer in config["model"]["physics"]["encoder"]["feature_layers"]
-        #         ],
-        #     ).to(device=DEVICE)
+            # Use your group_channels helper   gggg
+            v_img: torch.Tensor = group_channels(
+                sample=val_batch,
+                channel_names=[
+                    layer["name"]
+                    for layer in config["model"]["feature_layers"]["vision"]
+                ],
+            ).to(device=DEVICE)
+            p_img: torch.Tensor = group_channels(
+                sample=val_batch,
+                channel_names=[
+                    layer["name"]
+                    for layer in config["model"]["feature_layers"]["physics"]
+                ],
+            ).to(device=DEVICE)
 
-        #     # 2. Get full latent maps (no masking)
-        #     # We use batch[0] to only look at the first image in the batch
-        #     sx_vis = vision_encoder(v_img[0:1])  # [1, 256, D]
-        #     sx_phy = physics_encoder(p_img[0:1])  # [1, 256, D]
-        #     z_vision: torch.Tensor = vision_encoder._pos_emb.repeat(
-        #         sx_vis.shape[0], 1, 1
-        #     ).detach()
-        #     z_physics: torch.Tensor = physics_encoder._pos_emb.repeat(
-        #         sx_phy.shape[0], 1, 1
-        #     ).detach()
-        #     sy_hat_vis = vision_predictor(sx=sx_vis, z=z_vision)
-        #     sy_hat_phy = vision_predictor(sx=sx_phy, z=z_physics)
+            # 2. Get full latent maps (no masking)
+            # We use batch[0] to only look at the first image in the batch
+            # sx_vis = vision_encoder(v_img[0:1])  # [1, 256, D]
+            # sx_phy = physics_encoder(p_img[0:1])  # [1, 256, D]
+            sx_: MultispectralJEPAEncoderOutput = encoder(
+                vision_image=v_img[0:1], physics_image=p_img[0:1]
+            )
+            sx_vis, sx_phy = sx_["vision_encoding"], sx_["physics_encoding"]
+            sx = torch.cat([sx_vis, sx_phy], dim=0)
+            z_vision: torch.Tensor = encoder._physics_pos_emb.repeat(
+                sx_vis.shape[0], 1, 1
+            ).detach()
+            z_physics: torch.Tensor = encoder._physics_pos_emb.repeat(
+                sx_phy.shape[0], 1, 1
+            ).detach()
+            z = torch.cat([z_vision, z_physics], dim=0)
+            sy_hat = predictor(sx=sx, z=z)
+            sy_hat_vis, sy_hat_phy = torch.chunk(sy_hat, chunks=2, dim=0)
 
-        #     # 3. Log the PCA
-        #     # We pass v_img[0][:3] assuming the first 3 channels are RGB
-        #     log_latent_pca(
-        #         sample_vision_image=v_img[0][:3],
-        #         sample_physics_image=p_img[0],
-        #         vision_tokens=sx_vis[0],
-        #         physics_tokens=sx_phy[0],
-        #         vision_pred_tokens=sy_hat_vis[0],
-        #         physics_pred_tokens=sy_hat_phy[0],
-        #         config=config,
-        #     )
+            # 3. Log the PCA
+            # We pass v_img[0][:3] assuming the first 3 channels are RGB
+            log_latent_pca(
+                sample_vision_image=v_img[0][:3],
+                sample_physics_image=p_img[0],
+                vision_tokens=sx_vis[0],
+                physics_tokens=sx_phy[0],
+                vision_pred_tokens=sy_hat_vis[0],
+                physics_pred_tokens=sy_hat_phy[0],
+                config=config,
+            )
 
-        # vision_encoder.train()
-        # physics_encoder.train()
+        encoder.train()
+        predictor.train()
 
-        # scheduler.step()
+        scheduler.step()
 
     # Save the models
     weights_save_dir: Path = Path(
