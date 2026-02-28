@@ -4,13 +4,16 @@ from typing import TypedDict
 import torch
 import yaml
 
+from marsls_seg.utils.data.marsls import MarsLS_Sample
 from marsls_seg.utils.models.ms_jepa.encoder import MultispectralJEPAEncoder
 from marsls_seg.utils.models.ms_jepa.predictor import MultispectralJEPAPredictor
+from marsls_seg.helpers.processing import group_channels
 
 
-class MultispectralJEPAModels(TypedDict):
+class MultispectralJEPALoaderOutput(TypedDict):
     encoder: MultispectralJEPAEncoder
     predictor: MultispectralJEPAPredictor
+    config: dict
 
 
 def build_encoder_predictor(
@@ -42,7 +45,7 @@ def build_encoder_predictor(
 
 def load_models(
     dir_path: Path, device: torch.device = torch.device("cpu")
-) -> MultispectralJEPAModels:
+) -> MultispectralJEPALoaderOutput:
     """
     Loads the Multispectral JEPA encoder and predictor models from the `dir_path`
     directory, created after training the model.
@@ -70,6 +73,35 @@ def load_models(
     predictor.load_state_dict(torch.load(predictor_path, weights_only=True))
 
     # Load models onto target device and return
-    return MultispectralJEPAModels(
-        encoder=encoder.to(device=device), predictor=predictor.to(device=device)
+    return MultispectralJEPALoaderOutput(
+        encoder=encoder.to(device=device),
+        predictor=predictor.to(device=device),
+        config=config,
     )
+
+
+def preprocess_batch(batch: MarsLS_Sample, config: dict) -> MarsLS_Sample:
+    batch["slope"] = batch["slope"].clamp_min(min=-50)
+    for layer in config["data"]["feature_info"]:
+        info = layer["layer"]
+        name = info["name"]
+        mean = torch.as_tensor(info["mean"]).unsqueeze(0).unsqueeze(2).unsqueeze(3)
+        std = torch.as_tensor(info["std"]).unsqueeze(0).unsqueeze(2).unsqueeze(3)
+        batch[name] = (batch[name] - mean) / std
+    return batch
+
+
+def get_vision_physics_images(batch: MarsLS_Sample, config: dict, device: torch.device):
+    vision_image: torch.Tensor = group_channels(
+        sample=batch,
+        channel_names=[
+            layer["name"] for layer in config["model"]["feature_layers"]["vision"]
+        ],
+    ).to(device=device)
+    physics_image: torch.Tensor = group_channels(
+        sample=batch,
+        channel_names=[
+            layer["name"] for layer in config["model"]["feature_layers"]["physics"]
+        ],
+    ).to(device=device)
+    return vision_image, physics_image
