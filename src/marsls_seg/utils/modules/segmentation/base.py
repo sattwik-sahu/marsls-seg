@@ -15,6 +15,9 @@ class BaseSegmentationHead(torch.nn.Module):
     @override
     @abstractmethod
     def forward(
-        self, vision_encodings: torch.Tensor, physics_encodings: torch.Tensor
+        self,
+        vision_encodings: torch.Tensor,
+        physics_encodings: torch.Tensor,
+        image: torch.Tensor | None = None,
     ) -> torch.Tensor:
         pass

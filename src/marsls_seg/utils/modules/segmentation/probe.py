@@ -18,7 +18,10 @@ class LinearProbeSegmentationHead(BaseSegmentationHead):
         )
 
     def forward(
-        self, vision_encodings: torch.Tensor, physics_encodings: torch.Tensor
+        self,
+        vision_encodings: torch.Tensor,
+        physics_encodings: torch.Tensor,
+        image: torch.Tensor | None = None,
     ) -> torch.Tensor:
         x: torch.Tensor = torch.cat([vision_encodings, physics_encodings], dim=-1)
         batch_size, n_patches, dim = x.shape

@@ -38,10 +38,10 @@ class MarsLS_Dataset(Sized, torch.utils.data.Dataset[MarsLS_Sample]):
     _IMAGES_DIR: str = "images"
     _LABELS_DIR: str = "masks"
 
-    def __init__(self, data_root: Path, split: _SplitName) -> None:
+    def __init__(self, data_root: Path, split: _SplitName, phase: int) -> None:
         super().__init__()
 
-        self._data_dir: Path = data_root / split
+        self._data_dir: Path = data_root / f"phase-{str(phase).zfill(2)}" / split
 
         # Check if data directory exists
         if not (self._data_dir.is_dir() and self._data_dir.exists()):
@@ -73,7 +73,7 @@ class MarsLS_Dataset(Sized, torch.utils.data.Dataset[MarsLS_Sample]):
         image: torch.Tensor = torch.from_numpy(tiff_imread(image_path)).permute(2, 0, 1)
 
         # Retrieve the label (if exists)
-        label: torch.Tensor | None = None
+        label: torch.Tensor = torch.empty(0)
         if self._labels_exist:
             label_path: str = self._label_paths[index]
             label = torch.from_numpy(tiff_imread(label_path))

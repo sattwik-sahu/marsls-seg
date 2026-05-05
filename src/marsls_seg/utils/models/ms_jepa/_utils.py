@@ -51,10 +51,8 @@ def load_models(
     directory, created after training the model.
 
     Args:
-        dir_path (Path): The `Path` to the directory where the model weights
-            and config are saved after training.
-        device (torch.device): The device to load the models on.
-            Default: `torch.device("cpu")`
+        dir_path (Path): The `Path` to the directory where the model weights and config are saved after training.
+        device (torch.device): The device to load the models on. Default: `torch.device("cpu")`
     """
 
     # Parse config

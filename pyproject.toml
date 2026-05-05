@@ -10,10 +10,12 @@ dependencies = [
     "imagecodecs>=2026.1.14",
     "marimo>=0.20.2",
     "numpy>=2.4.2",
+    "segmentation-models-pytorch>=0.5.0",
     "tifffile>=2026.1.28",
     "timm>=1.0.24",
     "torch>=2.10.0",
     "torchvision>=0.25.0",
+    "transformers>=5.3.0",
     "x-transformers>=2.16.1",
 ]
 

@@ -25,6 +25,7 @@ from marsls_seg.utils.modules.segmentation.base import (
     BaseSegmentationHead as SegmentationHead,
 )
 from marsls_seg.utils.modules.segmentation.probe import LinearProbeSegmentationHead
+from marsls_seg.utils.modules.segmentation.anyup_seg import AnyUpSegmentationHead
 from marsls_seg.utils.train.ms_jepa_sw import (
     create_dataloaders,
     group_channels,
@@ -56,13 +57,19 @@ def build_segmentation_module(
     #     dim_embed=config["model"]["dim"],
     #     base_channels=768,
     # ).to(device=DEVICE)
-    return AtrousConvolutionSegHead(dim_embed=config["model"]["dim"], n_classes=1)
+    # return AtrousConvolutionSegHead(dim_embed=config["model"]["dim"], n_classes=1)
     # return LinearProbeSegmentationHead(
     #     dim_embed=config["model"]["dim"],
     #     image_size=config["data"]["image_size"],
     #     patch_size=config["model"]["patch_size"],
     #     n_classes=1,
     # ).to(device=DEVICE)
+
+    return AnyUpSegmentationHead(
+        dim_embed=config["model"]["dim"],
+        image_size=config["data"]["image_size"],
+        patch_size=config["model"]["patch_size"],
+    ).to(device=DEVICE)
 
 
 def train(weights_dir: Path) -> None:
@@ -76,13 +83,15 @@ def train(weights_dir: Path) -> None:
     segmentation = build_segmentation_module(config=config).to(device=DEVICE)
 
     train_loader, val_loader, _ = create_dataloaders(
-        data_root=Path(config["data"]["root_dir"]), batch_size=64
+        data_root=Path(config["data"]["root_dir"]),
+        batch_size=8,
+        phase=config["data"]["phase"],
     )
 
     # 1. Lower the Learning Rates
     optimizer = torch.optim.AdamW(
         [
-            {"params": segmentation.parameters(), "lr": 1e-4, "weight_decay": 0.02},
+            {"params": segmentation.parameters(), "lr": 1e-3},
         ]
     )
 
@@ -95,61 +104,79 @@ def train(weights_dir: Path) -> None:
     dice_loss_fn = LogCoshDiceLoss()
     bce_loss_fn = torch.nn.BCEWithLogitsLoss()
 
-    for epoch in range(15_000):
-        segmentation.train()
-        epoch_train_losses = []
+    try:
+        for epoch in range(15_000):
+            segmentation.train()
+            epoch_train_losses = []
 
-        for batch in train_loader:
-            optimizer.zero_grad()
-            batch = preprocess_batch(batch=batch, config=config)
-            vision_image, physics_image = get_inputs(sample=batch)
-            label = batch["label"].unsqueeze(1).to(device=DEVICE, dtype=torch.float32)
-
-            # with torch.autocast(device_type=DEVICE.type, dtype=torch.bfloat16):
-            with torch.no_grad():
-                outputs: MultispectralJEPAEncoderOutput = encoder(
-                    vision_image=vision_image.to(device=DEVICE),
-                    physics_image=physics_image.to(device=DEVICE),
+            for batch in train_loader:
+                optimizer.zero_grad()
+                batch = preprocess_batch(batch=batch, config=config)
+                vision_image, physics_image = get_inputs(sample=batch)
+                label = (
+                    batch["label"].unsqueeze(1).to(device=DEVICE, dtype=torch.float32)
                 )
-                v_tokens = outputs["vision_encoding"]
-                p_tokens = outputs["physics_encoding"]
-            logits = segmentation(vision_encodings=v_tokens, physics_encodings=p_tokens)
 
-            # Hybrid Loss Calculation
-            loss_dice = dice_loss_fn(logits, label)
-            loss_bce = bce_loss_fn(logits, label)
-            total_loss = loss_dice + loss_bce
+                # with torch.autocast(device_type=DEVICE.type, dtype=torch.bfloat16):
+                with torch.no_grad():
+                    outputs: MultispectralJEPAEncoderOutput = encoder(
+                        vision_image=vision_image.to(device=DEVICE),
+                        physics_image=physics_image.to(device=DEVICE),
+                    )
+                    v_tokens = outputs["vision_encoding"]
+                    p_tokens = outputs["physics_encoding"]
+                logits = segmentation(
+                    vision_encodings=v_tokens,
+                    physics_encodings=p_tokens,
+                    image=vision_image[:, :3].to(device=DEVICE),
+                )
 
-            total_loss.backward()
-            torch.nn.utils.clip_grad_norm_(segmentation.parameters(), max_norm=1.0)
-            optimizer.step()
-            epoch_train_losses.append(total_loss.item())
+                # Hybrid Loss Calculation
+                loss_dice = dice_loss_fn(logits, label)
+                loss_bce = bce_loss_fn(logits, label)
+                total_loss = loss_dice + loss_bce
 
-        # Validation Step
-        avg_val_loss, avg_val_iou, val_sample = validate(
-            segmentation,
-            encoder,
-            val_loader,
-            dice_loss_fn,
-            bce_loss_fn,
-            config,
-        )
-        # scheduler.step(avg_val_loss)
+                total_loss.backward()
+                torch.nn.utils.clip_grad_norm_(segmentation.parameters(), max_norm=1.0)
+                optimizer.step()
+                epoch_train_losses.append(total_loss.item())
 
-        # Logging
-        wandb.log(
-            {
-                "epoch": epoch,
-                "train_loss": np.mean(epoch_train_losses),
-                "val_loss": avg_val_loss,
-                "val_mIoU": avg_val_iou,
-                "visuals": [wandb.Image(val_sample, caption=f"Epoch {epoch} Eval")],
-            }
-        )
+            # Validation Step
+            avg_val_loss, avg_val_iou, val_sample = validate(
+                segmentation,
+                encoder,
+                val_loader,
+                dice_loss_fn,
+                bce_loss_fn,
+                config,
+            )
+            # scheduler.step(avg_val_loss)
 
-        print(
-            f"Epoch {epoch} | Train: {np.mean(epoch_train_losses):.4f} | Val: {avg_val_loss:.4f}"
-        )
+            # Logging
+            wandb.log(
+                {
+                    "epoch": epoch,
+                    "train_loss": np.mean(epoch_train_losses),
+                    "val_loss": avg_val_loss,
+                    "val_mIoU": avg_val_iou,
+                    "visuals": [wandb.Image(val_sample, caption=f"Epoch {epoch} Eval")],
+                }
+            )
+
+            print(
+                f"Epoch {epoch} | Train: {np.mean(epoch_train_losses):.4f} | Val: {avg_val_loss:.4f}"
+            )
+    except KeyboardInterrupt:
+        save_model(segmentation=segmentation)
+    finally:
+        save_model(segmentation=segmentation)
+
+
+def save_model(segmentation: SegmentationHead):
+    save_path = Path(f"data/runs/segmentation/{get_timestamp_now()}/")
+    save_path.mkdir(parents=True, exist_ok=True)
+    weights_path = save_path / "segmentation.pt"
+    torch.save(segmentation.state_dict(), weights_path)
 
 
 def calculate_iou(preds: torch.Tensor, labels: torch.Tensor, threshold: float = 0.5):
@@ -183,7 +210,11 @@ def validate(segmentation, encoder, loader, d_fn, b_fn, config):
             )
             v_tokens = output["vision_encoding"]
             p_tokens = output["physics_encoding"]
-            logits = segmentation(vision_encodings=v_tokens, physics_encodings=p_tokens)
+            logits = segmentation(
+                vision_encodings=v_tokens,
+                physics_encodings=p_tokens,
+                image=v_in[:, :3].to(device=DEVICE),
+            )
 
             # Metrics
             loss = d_fn(logits, label) + b_fn(logits, label)
@@ -228,11 +259,7 @@ def validate(segmentation, encoder, loader, d_fn, b_fn, config):
 
 def main():
     # train(weights_dir=Path("data/runs/ms-jepa/20260224-135544"))
-    train(
-        weights_dir=Path(
-            "/mnt/toshiba_hdd/code/robot-navigation/marsls-seg/data/runs/ms-jepa-sw/20260226-220808"
-        )
-    )
+    train(weights_dir=Path("data/runs/ms-jepa-sw/20260302-155142_rosy-energy-130"))
 
 
 if __name__ == "__main__":

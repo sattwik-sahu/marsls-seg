@@ -19,6 +19,7 @@ from marsls_seg.utils.models.ms_jepa.encoder import (
     MultispectralJEPAEncoderOutput,
 )
 from marsls_seg.utils.modules.masking import Mask, apply_mask, generate_mask
+from marsls_seg.utils.models.ms_jepa import load_ms_jepa
 
 
 def parse_config(config_file: Path) -> dict:
@@ -28,14 +29,16 @@ def parse_config(config_file: Path) -> dict:
 
 
 def create_dataloaders(
-    data_root: Path, batch_size: int
+    data_root: Path, batch_size: int, phase: int
 ) -> tuple[
     torch.utils.data.DataLoader,
     torch.utils.data.DataLoader,
     torch.utils.data.DataLoader,
 ]:
     def _create_dataloader(split: Literal["train", "test", "val"]):
-        dataset: MarsLS_Dataset = MarsLS_Dataset(data_root=data_root, split=split)
+        dataset: MarsLS_Dataset = MarsLS_Dataset(
+            data_root=data_root, split=split, phase=phase
+        )
         loader: torch.utils.data.DataLoader = torch.utils.data.DataLoader(
             dataset=dataset, batch_size=batch_size, shuffle=True, drop_last=True
         )
@@ -183,8 +186,20 @@ def log_latent_pca(
     plt.close(fig)
 
 
-def train(config_path: Path):
-    config: dict = parse_config(config_file=config_path)
+def train(config_path: Path, pretrained_path: Path | None = None):
+    if pretrained_path is not None:
+        ms_jepa = load_ms_jepa(dir_path=pretrained_path, device=DEVICE)
+        encoder, predictor, config = (
+            ms_jepa["encoder"],
+            ms_jepa["predictor"],
+            ms_jepa["config"],
+        )
+        config["data"] = parse_config(config_file=config_path)["data"]
+    else:
+        config = parse_config(config_file=config_path)
+        encoder, predictor = build_encoder_predictor(config=config, device=DEVICE)
+
+    # Create models
     training_config: dict = config["training"]
     data_config: dict = config["data"]
 
@@ -192,10 +207,8 @@ def train(config_path: Path):
     train_loader, val_loader, test_loader = create_dataloaders(
         data_root=Path(data_config["root_dir"]),
         batch_size=training_config["batch_size"],
+        phase=data_config["phase"],
     )
-
-    # Create models
-    encoder, predictor = build_encoder_predictor(config=config, device=DEVICE)
 
     # SIGReg regularization
     sigreg: SIGReg = SIGReg().to(device=DEVICE)
@@ -224,175 +237,187 @@ def train(config_path: Path):
 
     wandb.init(project="MarsLS-JEPA", config=config)
 
-    # Start training
-    batch: MarsLS_Sample
-    for epoch in range(training_config["n_epochs"]):
-        mask_ratio: float = (
-            config["training"]["mask_ratio"]["start"]
-            + epoch
-            * (
-                config["training"]["mask_ratio"]["end"]
-                - config["training"]["mask_ratio"]["start"]
+    try:
+        # Start training
+        batch: MarsLS_Sample
+        for epoch in range(training_config["n_epochs"]):
+            mask_ratio: float = (
+                config["training"]["mask_ratio"]["start"]
+                + epoch
+                * (
+                    config["training"]["mask_ratio"]["end"]
+                    - config["training"]["mask_ratio"]["start"]
+                )
+                / training_config["n_epochs"]
             )
-            / training_config["n_epochs"]
-        )
 
-        for batch in train_loader:
-            batch = preprocess_batch(batch=batch, config=config)
-            vision_image: torch.Tensor = group_channels(
-                sample=batch,
-                channel_names=[
-                    layer["name"]
-                    for layer in config["model"]["feature_layers"]["vision"]
-                ],
-            ).to(device=DEVICE)
-            physics_image: torch.Tensor = group_channels(
-                sample=batch,
-                channel_names=[
-                    layer["name"]
-                    for layer in config["model"]["feature_layers"]["physics"]
-                ],
-            ).to(device=DEVICE)
+            for batch in train_loader:
+                batch = preprocess_batch(batch=batch, config=config)
+                vision_image: torch.Tensor = group_channels(
+                    sample=batch,
+                    channel_names=[
+                        layer["name"]
+                        for layer in config["model"]["feature_layers"]["vision"]
+                    ],
+                ).to(device=DEVICE)
+                physics_image: torch.Tensor = group_channels(
+                    sample=batch,
+                    channel_names=[
+                        layer["name"]
+                        for layer in config["model"]["feature_layers"]["physics"]
+                    ],
+                ).to(device=DEVICE)
 
-            # Input preparation
-            n_tokens: int = int(
-                (data_config["image_size"] // config["model"]["patch_size"]) ** 2
-            )
-            mask: Mask = generate_mask(n_tokens=n_tokens, mask_ratio=mask_ratio)
-
-            optimizer.zero_grad()
-
-            with torch.autocast(device_type=DEVICE.type, dtype=torch.bfloat16):
-                encoding: MultispectralJEPAEncoderOutput = encoder(
-                    vision_image=vision_image, physics_image=physics_image, mask=mask
+                # Input preparation
+                n_tokens: int = int(
+                    (data_config["image_size"] // config["model"]["patch_size"]) ** 2
                 )
-                sx_vision: torch.Tensor = encoding["vision_encoding"]
-                sx_physics: torch.Tensor = encoding["physics_encoding"]
+                mask: Mask = generate_mask(n_tokens=n_tokens, mask_ratio=mask_ratio)
 
-                _, z_vision = apply_mask(
-                    encoder._vision_pos_emb.repeat(training_config["batch_size"], 1, 1),
-                    mask=mask,
-                )
-                _, z_physics = apply_mask(
-                    encoder._physics_pos_emb.repeat(
-                        training_config["batch_size"], 1, 1
-                    ),
-                    mask=mask,
+                optimizer.zero_grad()
+
+                with torch.autocast(device_type=DEVICE.type, dtype=torch.bfloat16):
+                    encoding: MultispectralJEPAEncoderOutput = encoder(
+                        vision_image=vision_image,
+                        physics_image=physics_image,
+                        mask=mask,
+                    )
+                    sx_vision: torch.Tensor = encoding["vision_encoding"]
+                    sx_physics: torch.Tensor = encoding["physics_encoding"]
+
+                    _, z_vision = apply_mask(
+                        encoder._vision_pos_emb.repeat(
+                            training_config["batch_size"], 1, 1
+                        ),
+                        mask=mask,
+                    )
+                    _, z_physics = apply_mask(
+                        encoder._physics_pos_emb.repeat(
+                            training_config["batch_size"], 1, 1
+                        ),
+                        mask=mask,
+                    )
+
+                    sx = torch.cat([sx_vision, sx_physics], dim=0)
+                    z = torch.cat([z_physics, z_vision], dim=0)
+                    sy_hat = predictor(sx=sx, z=z)
+
+                    with torch.no_grad():
+                        sy_: MultispectralJEPAEncoderOutput = encoder(
+                            vision_image=vision_image, physics_image=physics_image
+                        )
+                        sy_vision, sy_physics = (
+                            sy_["vision_encoding"],
+                            sy_["physics_encoding"],
+                        )
+                        _, sy = apply_mask(
+                            torch.cat([sy_physics, sy_vision], dim=0), mask=mask
+                        )
+
+                    # Calculate losses
+                    loss_jepa = torch.nn.functional.mse_loss(sy_hat, sy.detach())
+                    loss_sigreg = sigreg(sx.transpose(0, 1)) + sigreg(
+                        sy.transpose(0, 1)
+                    )
+
+                    lambd = training_config["lambda"]
+                    loss = (1 - lambd) * loss_jepa + lambd * loss_sigreg
+
+                loss.backward()
+
+                grad_norm: float = 0
+                grad_norm += torch.nn.utils.clip_grad_norm_(
+                    encoder.parameters(), training_config["grad_clip_norm"]
+                ).item()
+                grad_norm += torch.nn.utils.clip_grad_norm_(
+                    predictor.parameters(), training_config["grad_clip_norm"]
+                ).item()
+                grad_norm /= 4
+                optimizer.step()
+
+                # 4. W&B Logging
+                wandb.log(
+                    {
+                        "train/total_loss": loss.item(),
+                        "train/loss_jepa": loss_jepa.item(),
+                        "train/loss_sigreg": loss_sigreg.item(),
+                        "train/grad_norm": grad_norm,
+                        "meta/lr": optimizer.param_groups[0]["lr"],
+                        "meta/mask_ratio": mask_ratio,
+                        "meta/epoch": epoch,
+                    }
                 )
 
-                sx = torch.cat([sx_vision, sx_physics], dim=0)
-                z = torch.cat([z_physics, z_vision], dim=0)
+            encoder.eval()
+            predictor.eval()
+            with torch.no_grad():
+                # 1. Grab a single validation sample
+                val_batch = next(iter(val_loader))
+
+                # Use your group_channels helper   gggg
+                v_img: torch.Tensor = group_channels(
+                    sample=val_batch,
+                    channel_names=[
+                        layer["name"]
+                        for layer in config["model"]["feature_layers"]["vision"]
+                    ],
+                ).to(device=DEVICE)
+                p_img: torch.Tensor = group_channels(
+                    sample=val_batch,
+                    channel_names=[
+                        layer["name"]
+                        for layer in config["model"]["feature_layers"]["physics"]
+                    ],
+                ).to(device=DEVICE)
+
+                # 2. Get full latent maps (no masking)
+                # We use batch[0] to only look at the first image in the batch
+                # sx_vis = vision_encoder(v_img[0:1])  # [1, 256, D]
+                # sx_phy = physics_encoder(p_img[0:1])  # [1, 256, D]
+                sx_: MultispectralJEPAEncoderOutput = encoder(
+                    vision_image=v_img[0:1], physics_image=p_img[0:1]
+                )
+                sx_vis, sx_phy = sx_["vision_encoding"], sx_["physics_encoding"]
+                sx = torch.cat([sx_vis, sx_phy], dim=0)
+                z_vision: torch.Tensor = encoder._physics_pos_emb.repeat(
+                    sx_vis.shape[0], 1, 1
+                ).detach()
+                z_physics: torch.Tensor = encoder._physics_pos_emb.repeat(
+                    sx_phy.shape[0], 1, 1
+                ).detach()
+                z = torch.cat([z_vision, z_physics], dim=0)
                 sy_hat = predictor(sx=sx, z=z)
+                sy_hat_vis, sy_hat_phy = torch.chunk(sy_hat, chunks=2, dim=0)
 
-                with torch.no_grad():
-                    sy_: MultispectralJEPAEncoderOutput = encoder(
-                        vision_image=vision_image, physics_image=physics_image
-                    )
-                    sy_vision, sy_physics = (
-                        sy_["vision_encoding"],
-                        sy_["physics_encoding"],
-                    )
-                    _, sy = apply_mask(
-                        torch.cat([sy_physics, sy_vision], dim=0), mask=mask
-                    )
+                # 3. Log the PCA
+                # We pass v_img[0][:3] assuming the first 3 channels are RGB
+                log_latent_pca(
+                    sample_vision_image=v_img[0][:3],
+                    sample_physics_image=p_img[0],
+                    vision_tokens=sx_vis[0],
+                    physics_tokens=sx_phy[0],
+                    vision_pred_tokens=sy_hat_vis[0],
+                    physics_pred_tokens=sy_hat_phy[0],
+                    config=config,
+                )
 
-                # Calculate losses
-                loss_jepa = torch.nn.functional.mse_loss(sy_hat, sy.detach())
-                loss_sigreg = sigreg(sx.transpose(0, 1))
+            encoder.train()
+            predictor.train()
 
-                lambd = training_config["lambda"]
-                loss = (1 - lambd) * loss_jepa + lambd * loss_sigreg
-
-            loss.backward()
-
-            grad_norm: float = 0
-            grad_norm += torch.nn.utils.clip_grad_norm_(
-                encoder.parameters(), training_config["grad_clip_norm"]
-            ).item()
-            grad_norm += torch.nn.utils.clip_grad_norm_(
-                predictor.parameters(), training_config["grad_clip_norm"]
-            ).item()
-            grad_norm /= 4
-            optimizer.step()
-
-            # 4. W&B Logging
-            wandb.log(
-                {
-                    "train/total_loss": loss.item(),
-                    "train/loss_jepa": loss_jepa.item(),
-                    "train/loss_sigreg": loss_sigreg.item(),
-                    "train/grad_norm": grad_norm,
-                    "meta/lr": optimizer.param_groups[0]["lr"],
-                    "meta/mask_ratio": mask_ratio,
-                    "meta/epoch": epoch,
-                }
-            )
-
-        encoder.eval()
-        predictor.eval()
-        with torch.no_grad():
-            # 1. Grab a single validation sample
-            val_batch = next(iter(val_loader))
-
-            # Use your group_channels helper   gggg
-            v_img: torch.Tensor = group_channels(
-                sample=val_batch,
-                channel_names=[
-                    layer["name"]
-                    for layer in config["model"]["feature_layers"]["vision"]
-                ],
-            ).to(device=DEVICE)
-            p_img: torch.Tensor = group_channels(
-                sample=val_batch,
-                channel_names=[
-                    layer["name"]
-                    for layer in config["model"]["feature_layers"]["physics"]
-                ],
-            ).to(device=DEVICE)
-
-            # 2. Get full latent maps (no masking)
-            # We use batch[0] to only look at the first image in the batch
-            # sx_vis = vision_encoder(v_img[0:1])  # [1, 256, D]
-            # sx_phy = physics_encoder(p_img[0:1])  # [1, 256, D]
-            sx_: MultispectralJEPAEncoderOutput = encoder(
-                vision_image=v_img[0:1], physics_image=p_img[0:1]
-            )
-            sx_vis, sx_phy = sx_["vision_encoding"], sx_["physics_encoding"]
-            sx = torch.cat([sx_vis, sx_phy], dim=0)
-            z_vision: torch.Tensor = encoder._physics_pos_emb.repeat(
-                sx_vis.shape[0], 1, 1
-            ).detach()
-            z_physics: torch.Tensor = encoder._physics_pos_emb.repeat(
-                sx_phy.shape[0], 1, 1
-            ).detach()
-            z = torch.cat([z_vision, z_physics], dim=0)
-            sy_hat = predictor(sx=sx, z=z)
-            sy_hat_vis, sy_hat_phy = torch.chunk(sy_hat, chunks=2, dim=0)
-
-            # 3. Log the PCA
-            # We pass v_img[0][:3] assuming the first 3 channels are RGB
-            log_latent_pca(
-                sample_vision_image=v_img[0][:3],
-                sample_physics_image=p_img[0],
-                vision_tokens=sx_vis[0],
-                physics_tokens=sx_phy[0],
-                vision_pred_tokens=sy_hat_vis[0],
-                physics_pred_tokens=sy_hat_phy[0],
-                config=config,
-            )
-
-        encoder.train()
-        predictor.train()
-
-        scheduler.step()
-
-    # Save the models
-    weights_save_dir: Path = Path(
-        f"{config['data']['weights_dir']}/{get_timestamp_now()}/"
-    )
-    os.mkdir(weights_save_dir)
-    print("Saving model...")
-    torch.save(encoder.state_dict(), weights_save_dir / "encoder.pt")
-    torch.save(predictor.state_dict(), weights_save_dir / "predictor.pt")
-    with open(weights_save_dir / "config.yaml", "w") as f:
-        yaml.safe_dump(config, f)
+            scheduler.step()
+    except KeyboardInterrupt:
+        pass
+    except torch.OutOfMemoryError:
+        print("Out of memory error... Try a lower batch size.")
+    finally:
+        # Save the models
+        weights_save_dir: Path = Path(
+            f"{config['data']['weights_dir']}/{get_timestamp_now()}_{wandb.run.name or ''}/"
+        )
+        weights_save_dir.mkdir(parents=True, exist_ok=False)
+        print("Saving model...")
+        torch.save(encoder.state_dict(), weights_save_dir / "encoder.pt")
+        torch.save(predictor.state_dict(), weights_save_dir / "predictor.pt")
+        with open(weights_save_dir / "config.yaml", "w") as f:
+            yaml.safe_dump(config, f)
+        wandb.finish()
