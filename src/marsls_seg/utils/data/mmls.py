@@ -5,10 +5,12 @@ from typing import Final, Sized
 import torch
 from tifffile import imread as tiff_imread
 
-from marsls_seg.utils.data._typing import MarsLS_Sample, SplitName
+from marsls_seg.utils.data._typing import MultimodalMartianLandslideSample, SplitName
 
 
-class MultimodalMartianLandslideDataset(Sized, torch.utils.data.Dataset[MarsLS_Sample]):
+class MultimodalMartianLandslideDataset(
+    Sized, torch.utils.data.Dataset[MultimodalMartianLandslideSample]
+):
     """
     The Multimodal Martian Landslide Detection (MMLSv2) dataset [1]. It contains data about the following channels:
     1. RGB
@@ -24,11 +26,11 @@ class MultimodalMartianLandslideDataset(Sized, torch.utils.data.Dataset[MarsLS_S
     - [1]: Paheding, Sidike, et al. "MMLSv2: A Multimodal Dataset for Martian Landslide Detection in Remote Sensing Imagery." arXiv preprint arXiv:2602.08112 (2026).
     """
 
-    _THERMAL_INERTIAL_INDEX: Final[slice] = slice(0, 1)
-    _SLOPE_INDEX: Final[slice] = slice(1, 2)
-    _DEM_INDEX: Final[slice] = slice(2, 3)
-    _GRAY_INDEX: Final[slice] = slice(3, 4)
-    _RGB_INDEX: Final[slice] = slice(4, 7)
+    _THERMAL_INERTIAL_INDEX: Final[slice] = slice(5, 6)
+    _SLOPE_INDEX: Final[slice] = slice(4, 5)
+    _DEM_INDEX: Final[slice] = slice(3, 4)
+    _GRAY_INDEX: Final[slice] = slice(6, 7)
+    _RGB_INDEX: Final[slice] = slice(0, 3)
 
     _IMAGES_DIR: Final[str] = "images"
     _LABELS_DIR: Final[str] = "masks"
@@ -99,7 +101,7 @@ class MultimodalMartianLandslideDataset(Sized, torch.utils.data.Dataset[MarsLS_S
     def __len__(self) -> int:
         return len(self._image_paths)
 
-    def __getitem__(self, index) -> MarsLS_Sample:
+    def __getitem__(self, index) -> MultimodalMartianLandslideSample:
         # Retrieve path from path list
         image_path: str = self._image_paths[index]
 
@@ -110,16 +112,19 @@ class MultimodalMartianLandslideDataset(Sized, torch.utils.data.Dataset[MarsLS_S
         label: torch.Tensor = torch.empty(0)
         if self._labels_exist:
             label_path: str = self._label_paths[index]
-            label = torch.from_numpy(tiff_imread(label_path))
+            label = torch.from_numpy(tiff_imread(label_path)).to(dtype=torch.float32)
 
         # Construct the sample
-        return MarsLS_Sample(
+        return MultimodalMartianLandslideSample(
             thermal_inertial=image[
                 MultimodalMartianLandslideDataset._THERMAL_INERTIAL_INDEX
             ],
             dem=image[MultimodalMartianLandslideDataset._DEM_INDEX],
             slope=image[MultimodalMartianLandslideDataset._SLOPE_INDEX],
-            gray=image[MultimodalMartianLandslideDataset._GRAY_INDEX],
+            grayscale=image[MultimodalMartianLandslideDataset._GRAY_INDEX],
             rgb=image[MultimodalMartianLandslideDataset._RGB_INDEX],
             label=label,
         )
+
+
+

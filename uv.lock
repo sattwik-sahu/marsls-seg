@@ -1466,6 +1466,7 @@ train = [
     { name = "pyyaml" },
     { name = "rich" },
     { name = "scikit-learn" },
+    { name = "torchinfo" },
     { name = "typer" },
     { name = "wandb" },
 ]
@@ -1502,6 +1503,7 @@ train = [
     { name = "pyyaml", specifier = ">=6.0.3" },
     { name = "rich", specifier = ">=14.3.3" },
     { name = "scikit-learn", specifier = ">=1.8.0" },
+    { name = "torchinfo", specifier = ">=1.8.0" },
     { name = "typer", specifier = ">=0.24.1" },
     { name = "wandb", specifier = ">=0.25.0" },
 ]
@@ -3104,6 +3106,15 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/33/e5/64cc5372bc07825ff5dec44ef92875aa575fbe48dcfb0ed6f0bea1fd76f0/torch_einops_utils-0.0.32.tar.gz", hash = "sha256:bfa7a331286c4cce846e7e2ba9f7e08d559f7a76b520f8f3228209df02e8ed01", size = 9514, upload-time = "2026-05-04T16:25:37.656Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/9d/1a/12c0d602942605173b9ddf76ccf208887709c17ecda23416b9ef8f6ca284/torch_einops_utils-0.0.32-py3-none-any.whl", hash = "sha256:96f70c1e6614896b0113e7a8934fa0d6e4deb82829c803a5caea5b06fa3aaa5e", size = 7268, upload-time = "2026-05-04T16:25:36.5Z" },
+]
+
+[[package]]
+name = "torchinfo"
+version = "1.8.0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/53/d9/2b811d1c0812e9ef23e6cf2dbe022becbe6c5ab065e33fd80ee05c0cd996/torchinfo-1.8.0.tar.gz", hash = "sha256:72e94b0e9a3e64dc583a8e5b7940b8938a1ac0f033f795457f27e6f4e7afa2e9", size = 25880, upload-time = "2023-05-14T19:23:26.377Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/72/25/973bd6128381951b23cdcd8a9870c6dcfc5606cb864df8eabd82e529f9c1/torchinfo-1.8.0-py3-none-any.whl", hash = "sha256:2e911c2918603f945c26ff21a3a838d12709223dc4ccf243407bce8b6e897b46", size = 23377, upload-time = "2023-05-14T19:23:24.141Z" },
 ]
 
 [[package]]
