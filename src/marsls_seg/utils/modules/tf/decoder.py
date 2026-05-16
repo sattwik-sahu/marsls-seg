@@ -1,8 +1,7 @@
-from typing import Any
-
 import torch
-from marsls_seg.utils.modules.tf.attention import MultiheadAttention, AttentionOutput
+
 from marsls_seg.utils.modules.tf.activation import SwiGLU
+from marsls_seg.utils.modules.tf.attention import AttentionOutput, MultiheadAttention
 
 
 class TransformerDecoderBlock(torch.nn.Module):
@@ -10,7 +9,7 @@ class TransformerDecoderBlock(torch.nn.Module):
     A transformer decoder block.
     """
 
-    def __init__(self, dim: int, n_heads: int) -> None:
+    def __init__(self, dim: int, n_heads: int, n_groups: int | None = None) -> None:
         super().__init__()
 
         self._dim: int = dim
@@ -18,9 +17,13 @@ class TransformerDecoderBlock(torch.nn.Module):
 
         # Initialize the modules
         self._norm1 = torch.nn.LayerNorm(normalized_shape=self._dim)
-        self._mha1 = MultiheadAttention(n_heads=self._n_heads, dim=dim)
+        self._mha1 = MultiheadAttention(
+            n_heads=self._n_heads, dim=dim, n_groups=n_groups
+        )
         self._norm2 = torch.nn.LayerNorm(normalized_shape=self._dim)
-        self._mha2 = MultiheadAttention(n_heads=self._n_heads, dim=dim)
+        self._mha2 = MultiheadAttention(
+            n_heads=self._n_heads, dim=dim, n_groups=n_groups
+        )
         self._norm3 = torch.nn.LayerNorm(normalized_shape=self._dim)
         self._ff_act = SwiGLU(dim=self._dim)
 
@@ -44,7 +47,9 @@ class TransformerDecoder(torch.nn.Module):
     A transformer decoder.
     """
 
-    def __init__(self, dim: int, n_heads: int, n_layers: int) -> None:
+    def __init__(
+        self, dim: int, n_heads: int, n_layers: int, n_groups: int | None = None
+    ) -> None:
         super().__init__()
 
         self._dim: int = dim
@@ -53,7 +58,9 @@ class TransformerDecoder(torch.nn.Module):
 
         self._layers = torch.nn.ModuleList(
             [
-                TransformerDecoderBlock(dim=self._dim, n_heads=self._n_heads)
+                TransformerDecoderBlock(
+                    dim=self._dim, n_heads=self._n_heads, n_groups=n_groups
+                )
                 for _ in range(self._n_layers)
             ]
         )

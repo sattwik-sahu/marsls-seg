@@ -1,10 +1,10 @@
+from typing import Literal
+
 import torch
-from tensordict import tensorclass
-from typing import Literal, Callable
+from tensordict import TensorClass
 
 
-@tensorclass
-class MultimodalMartianLandslideSample:
+class MultimodalMartianLandslideSample(TensorClass):
     """
     A sample of the Multimodal Martian Landslide detection dataset.
     """
@@ -31,8 +31,15 @@ class MultimodalMartianLandslideSample:
     Shape: `(1, 128, 128)`
     """
 
+    def merge_channels(self) -> torch.Tensor:
+        """
+        Returns the "fat-image" of a sample, i.e., all channels
+        concatenated into a single image with multiple channels.
 
-type Processor[T] = Callable[[T], T]
+        Returns:
+            torch.Tensor: The merged multi-channel image.
+        """
+        return torch.cat([self.get(key) for key in self.keys()], dim=-1)
 
 
 type SplitName = Literal["train", "val", "test"]

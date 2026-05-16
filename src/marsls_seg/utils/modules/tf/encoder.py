@@ -9,14 +9,16 @@ class TransformerEncoderBlock(torch.nn.Module):
     A transformer encoder block.
     """
 
-    def __init__(self, n_heads: int, dim: int) -> None:
+    def __init__(self, n_heads: int, dim: int, n_groups: int | None = None) -> None:
         super().__init__()
 
         self._dim: int = dim
         self._n_heads: int = n_heads
 
         self._norm1 = torch.nn.LayerNorm(normalized_shape=self._dim)
-        self._mha = MultiheadAttention(n_heads=self._n_heads, dim=self._dim)
+        self._mha = MultiheadAttention(
+            n_heads=self._n_heads, dim=self._dim, n_groups=n_groups
+        )
         self._norm2 = torch.nn.LayerNorm(normalized_shape=self._dim)
         self._ff_act = SwiGLU(dim=dim)
 
@@ -45,7 +47,9 @@ class TransformerEncoder(torch.nn.Module):
     arranged sequentially.
     """
 
-    def __init__(self, n_layers: int, n_heads: int, dim: int) -> None:
+    def __init__(
+        self, n_layers: int, n_heads: int, dim: int, n_groups: int | None = None
+    ) -> None:
         super().__init__()
 
         self._n_layers: int = n_layers
@@ -54,7 +58,9 @@ class TransformerEncoder(torch.nn.Module):
 
         self._layers = torch.nn.ModuleList(
             [
-                TransformerEncoderBlock(dim=self._dim, n_heads=self._n_heads)
+                TransformerEncoderBlock(
+                    dim=self._dim, n_heads=self._n_heads, n_groups=n_groups
+                )
                 for _ in range(self._n_layers)
             ]
         )

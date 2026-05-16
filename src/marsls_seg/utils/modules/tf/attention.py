@@ -3,7 +3,7 @@ from typing import Any
 import torch
 from tensordict import tensorclass
 import math
-from einops import rearrange
+from einops import rearrange, repeat
 
 
 @tensorclass
@@ -15,7 +15,13 @@ class AttentionOutput:
 class MultiheadAttention(torch.nn.Module):
     """The multi-head attention module."""
 
-    def __init__(self, n_heads: int, dim: int, dim_embed: int | None = None) -> None:
+    def __init__(
+        self,
+        n_heads: int,
+        dim: int,
+        dim_embed: int | None = None,
+        n_groups: int | None = None,
+    ) -> None:
         """
         Create a multi-head attention block.
 
@@ -24,6 +30,7 @@ class MultiheadAttention(torch.nn.Module):
             dim (int): The input dimension.
             dim_embed (int): The embedding dimension used for attention computation.
                 If not specified, defaults to the input dimension.
+            n_groups (int): The number of groups for grouped-query attention.
         """
         super().__init__()
 
@@ -36,23 +43,34 @@ class MultiheadAttention(torch.nn.Module):
         )
 
         self._head_dim: int = self._dim_embed // self._n_heads
+        self._n_groups: int = n_groups or self._n_heads
 
         # Initialize the weights
         self._W_query = torch.nn.Linear(
-            in_features=self._dim, out_features=self._dim_embed
+            in_features=self._dim, out_features=self._head_dim * self._n_heads
         )
         self._W_key = torch.nn.Linear(
-            in_features=self._dim, out_features=self._dim_embed
+            in_features=self._dim, out_features=self._head_dim * self._n_groups
         )
         self._W_value = torch.nn.Linear(
-            in_features=self._dim, out_features=self._dim_embed
+            in_features=self._dim, out_features=self._head_dim * self._n_groups
         )
         self._W_out = torch.nn.Linear(
             in_features=self._dim_embed, out_features=self._dim
         )
 
     def _split_into_heads(self, x: torch.Tensor) -> torch.Tensor:
-        return rearrange(x, "b n (h d) -> b h n d", h=self._n_heads)
+        return rearrange(x, "b s (nh dh) -> b nh s dh", nh=self._n_heads)
+
+    def _split_into_grouped_heads(self, x: torch.Tensor) -> torch.Tensor:
+        # Split raw channels into grouped head chunks
+        x = rearrange(x, "b s (ng dh) -> b ng s dh", ng=self._n_groups)
+
+        # Expand groups contiguously repeating chunks
+        x = repeat(
+            x, "b ng s dh -> b (ng rep) s dh", rep=self._n_heads // self._n_groups
+        )
+        return x
 
     def forward(
         self, query: torch.Tensor, key: torch.Tensor, value: torch.Tensor
@@ -62,13 +80,13 @@ class MultiheadAttention(torch.nn.Module):
         x_key: torch.Tensor = self._W_key(key)
         x_value: torch.Tensor = self._W_value(value)
 
-        # Split into heads
+        # Split into heads and groups for GQA
         x_query = self._split_into_heads(x=x_query)
-        x_key = self._split_into_heads(x=x_key)
-        x_value = self._split_into_heads(x=x_value)
+        x_key = self._split_into_grouped_heads(x=x_key)
+        x_value = self._split_into_grouped_heads(x=x_value)
 
         # Calculate attention score
-        score = x_query @ x_key.transpose(-2, -1) / math.sqrt(self._dim_embed)
+        score = x_query @ x_key.transpose(-2, -1) / math.sqrt(self._head_dim)
         attention_score = torch.softmax(score, dim=-1)
 
         # Calculate output

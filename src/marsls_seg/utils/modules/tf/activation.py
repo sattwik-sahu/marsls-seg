@@ -1,7 +1,4 @@
-from typing import Any
-
 import torch
-from torch.nn import Module
 
 
 class Swish(torch.nn.Module):

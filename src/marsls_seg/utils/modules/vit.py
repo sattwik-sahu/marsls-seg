@@ -2,6 +2,13 @@ import torch
 from einops import rearrange, repeat
 
 from marsls_seg.utils.modules.tf.encoder import TransformerEncoder
+from tensordict import TensorClass
+from typing import Optional
+
+
+class ViTInput(TensorClass):
+    image: torch.Tensor
+    mask: Optional[torch.Tensor] = None
 
 
 class VisionTransformer(torch.nn.Module):
@@ -17,6 +24,7 @@ class VisionTransformer(torch.nn.Module):
         patch_size: int,
         img_size: int,
         n_channels: int,
+        n_groups: int | None = None,
     ) -> None:
         super().__init__()
 
@@ -38,14 +46,23 @@ class VisionTransformer(torch.nn.Module):
             torch.randn(self._n_patches, self._dim) * 0.05
         )
         self._encoder = TransformerEncoder(
-            n_layers=self._n_layers, n_heads=self._n_heads, dim=self._dim
+            n_layers=self._n_layers,
+            n_heads=self._n_heads,
+            dim=self._dim,
+            n_groups=n_groups,
         )
 
     @property
     def pos_emb(self) -> torch.Tensor:
-        return self.pos_emb
+        return self._pos_emb
 
-    def forward(self, image: torch.Tensor) -> torch.Tensor:
+    @property
+    def n_patches(self) -> int:
+        return self._n_patches
+
+    def forward(self, x: ViTInput) -> torch.Tensor:
+        image = x.image
+
         if image.ndim == 3:
             image = image.unsqueeze(0)
 
@@ -60,6 +77,10 @@ class VisionTransformer(torch.nn.Module):
         # Apply positional encoding
         pos_emb = repeat(self._pos_emb, "n d -> b n d", b=b)
         patch_tokens = patch_tokens + pos_emb
+
+        # Apply masking if required
+        if x.mask is not None:
+            patch_tokens = patch_tokens[:, x.mask]
 
         # Pass through transformer encoder
         return self._encoder(patch_tokens)

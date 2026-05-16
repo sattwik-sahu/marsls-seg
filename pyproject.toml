@@ -35,7 +35,7 @@ plot = ["matplotlib>=3.10.8", "seaborn>=0.13.2"]
 
 
 [project.scripts]
-marsls-seg = "marsls_seg:main"
+marsls-train = "marsls_seg.train:main"
 
 [build-system]
 requires = ["uv_build>=0.9.5,<0.10.0"]
