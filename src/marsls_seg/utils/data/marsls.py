@@ -29,19 +29,19 @@ type _SplitName = Literal["train", "test", "val"]
 
 
 class MarsLS_Dataset(Sized, torch.utils.data.Dataset[MarsLS_Sample]):
-    _THERMAL_INERTIAL_INDEX: int = 0
-    _SLOPE_INDEX: int = 1
-    _DEM_INDEX: int = 2
-    _GRAY_INDEX: int = 3
+    _THERMAL_INERTIAL_INDEX: slice = slice(0, 1)
+    _SLOPE_INDEX: slice = slice(1, 2)
+    _DEM_INDEX: slice = slice(2, 3)
+    _GRAY_INDEX: slice = slice(3, 4)
     _RGB_INDEX: slice = slice(4, 7)
 
     _IMAGES_DIR: str = "images"
     _LABELS_DIR: str = "masks"
 
-    def __init__(self, data_root: Path, split: _SplitName) -> None:
+    def __init__(self, data_root: Path, split: _SplitName, phase: int) -> None:
         super().__init__()
 
-        self._data_dir: Path = data_root / split
+        self._data_dir: Path = data_root / f"phase-{str(phase).zfill(2)}" / split
 
         # Check if data directory exists
         if not (self._data_dir.is_dir() and self._data_dir.exists()):
@@ -73,7 +73,7 @@ class MarsLS_Dataset(Sized, torch.utils.data.Dataset[MarsLS_Sample]):
         image: torch.Tensor = torch.from_numpy(tiff_imread(image_path)).permute(2, 0, 1)
 
         # Retrieve the label (if exists)
-        label: torch.Tensor | None = None
+        label: torch.Tensor = torch.empty(0)
         if self._labels_exist:
             label_path: str = self._label_paths[index]
             label = torch.from_numpy(tiff_imread(label_path))
