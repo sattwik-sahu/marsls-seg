@@ -1,0 +1,4 @@
+_target_: marsls_seg.utils.train.channel_masking_jepa.ChannelMaskingJEPATrainer
+
+p1: 0.5
+p2: 3

@@ -1,5 +1,5 @@
 import torch
-from marsls_seg.utils.modules.jepa.base import BaseJEPA, JEPALoss
+from marsls_seg.utils.modules.jepa.base import BaseJEPA, BaseJEPALoss
 from marsls_seg.utils.modules.sigreg import SIGReg
 from marsls_seg.utils.modules.vit import VisionTransformer, ViTInput
 from marsls_seg.utils.modules.tf.decoder import TransformerDecoder
@@ -16,7 +16,7 @@ class TransformerDecoderPredictor(torch.nn.Module):
         return self._decoder(tgt=z, mem=s_x)
 
 
-class IJEPALoss(JEPALoss):
+class IJEPALoss(BaseJEPALoss):
     sigreg: torch.Tensor
     pred: torch.Tensor
 

@@ -1,0 +1,11 @@
+_target_: marsls_seg.utils.modules.channel_masking.jepa.ChannelMaskingJEPA
+
+context_encoder:
+  _target_: marsls_seg.utils.modules.channel_masking.encoder.ChannelMaskingViT
+  dim: 128
+  n_heads: 8
+  n_layers: 12
+  patch_size: 8
+  img_size: 128
+  n_channels: 7
+  n_groups: 4

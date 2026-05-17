@@ -8,11 +8,11 @@ from tensordict import TensorClass, TensorDict
 from typing_extensions import override
 
 
-class JEPALoss(TensorClass):
+class BaseJEPALoss(TensorClass):
     total: torch.Tensor
 
 
-class JEPAOutput[TEncoding, TLoss: JEPALoss](TensorClass):
+class JEPAOutput[TEncoding, TLoss: BaseJEPALoss](TensorClass):
     context_encoding: TEncoding
     target_encoding: TEncoding
     prediction: TEncoding
@@ -25,7 +25,7 @@ class BaseJEPA[
     TEncoding: torch.Tensor | TensorClass | TensorDict,
     TLatent: torch.Tensor | TensorClass | TensorDict,
     TPredictor: torch.nn.Module,
-    TLoss: JEPALoss,
+    TLoss: BaseJEPALoss,
 ](torch.nn.Module, ABC):
     """
     Base class for the Joint Embedding Predictive Architecture (JEPA).

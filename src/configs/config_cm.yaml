@@ -1,0 +1,22 @@
+defaults:
+  - _self_
+  - model: channel_masking
+  - trainer: channel_masking
+  - data/processor: norm
+
+data:
+  root_dir: "/mnt/toshiba_hdd/code/robot-navigation/marsls-seg/data/marsls-seg/mmlsv2"
+  params_file: "/mnt/toshiba_hdd/code/robot-navigation/marsls-seg/data/configs/mmls_norm.yaml"
+
+training:
+  batch_size: 32
+  lr: 1e-4
+  num_workers: 4
+  pin_memory: true
+  eval_int: 1
+  save_int: 50
+  ckpt_dir: /mnt/toshiba_hdd/code/robot-navigation/marsls-seg/data/runs/ms-jepa
+
+wandb:
+  project: MarsLS-JEPA
+  mode: "online"
