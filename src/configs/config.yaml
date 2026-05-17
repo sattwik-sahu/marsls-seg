@@ -20,3 +20,4 @@ training:
 wandb:
   project: MarsLS-JEPA
   mode: "online"
+  artifact_name: ijepa-vit

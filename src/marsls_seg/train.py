@@ -156,7 +156,7 @@ def main(cfg: DictConfig) -> None:
 
     if final_checkpoint_path.exists():
         model_artifact = wandb.Artifact(
-            name="marsls-ijepa-vit",
+            name=cfg.wandb.artifact_name,
             type="model",
             description="Self-supervised IJEPA Vision Transformer backbone trained on MMLSv2 imagery.",
         )
