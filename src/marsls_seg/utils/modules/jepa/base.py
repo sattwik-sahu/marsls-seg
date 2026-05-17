@@ -6,10 +6,23 @@ from typing import Optional
 import torch
 from tensordict import TensorClass, TensorDict
 from typing_extensions import override
+from marsls_seg.utils.modules._typing import TensorData
 
 
 class JEPALoss(TensorClass):
     total: torch.Tensor
+
+
+class JEPAEncoder[TInput: TensorData, TEncoding: TensorData](torch.nn.Module):
+    """TODO Implement forward()"""
+
+    pass
+
+
+class JEPAPredictor[TEncoding: TensorData, TLatent: TensorData](torch.nn.Module):
+    """TODO Implement forward()"""
+
+    pass
 
 
 class JEPAOutput[TEncoding, TLoss: JEPALoss](TensorClass):
