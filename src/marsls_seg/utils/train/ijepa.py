@@ -1,26 +1,26 @@
-from typing import override
+from typing import Any, override
 
+import plotly.graph_objects as go
 import torch
+import torch.nn.functional as F
 from torch.optim import Optimizer
 from torch.utils.data.dataloader import DataLoader
 
+from marsls_seg.helpers.mask import generate_uniform_mask
 from marsls_seg.utils.data.mmls import (
-    MultimodalMartianLandslideDataset,
     MultimodalMartianLandslideSample,
 )
-from marsls_seg.utils.data.processing import MultimodalMarsLandslideDataProcessor
 from marsls_seg.utils.modules.jepa.base import JEPAOutput
 from marsls_seg.utils.modules.jepa.ijepa import IJEPA, IJEPALoss
-from marsls_seg.utils.modules.tf.decoder import TransformerDecoder
-from marsls_seg.utils.modules.vit import VisionTransformer, ViTInput
+from marsls_seg.utils.modules.vit import ViTInput
 from marsls_seg.utils.train.base import BaseTrainer
 from wandb import Run
-from marsls_seg.helpers.mask import generate_uniform_mask, construct_latent
 
 
 class IJEPATrainer(BaseTrainer[IJEPA, MultimodalMartianLandslideSample]):
     """
-    IJEPA style trainer for ViT on fat images from MMLSv2 dataset.
+    IJEPA style trainer for ViT on fat images from MMLSv2 dataset
+    with advanced interactive latent space diagnostics.
     """
 
     def __init__(
@@ -29,7 +29,6 @@ class IJEPATrainer(BaseTrainer[IJEPA, MultimodalMartianLandslideSample]):
         super().__init__()
 
         self._mask_ratio: float = mask_ratio[0]
-
         self._delta_mask_ratio: float = (mask_ratio[1] - mask_ratio[0]) / n_epochs
         self._wandb = wandb
 
@@ -44,10 +43,51 @@ class IJEPATrainer(BaseTrainer[IJEPA, MultimodalMartianLandslideSample]):
         image = batch.merge_channels()
         x = ViTInput(image=image, mask=ids_keep).to(device=device)
         y = ViTInput(image=image).to(device=device)
-        z = construct_latent(
-            z_full=pos_emb, ids=ids_drop, batch_size=batch.batch_size[0]
-        )
+        z = pos_emb.unsqueeze(0).repeat(batch.batch_size[0], 1, 1)
         return x, y, z
+
+    def _generate_svd_chart(self, target_encodings: torch.Tensor) -> go.Figure | None:
+        """Computes singular values of target encodings and returns an interactive Plotly figure."""
+        # Flatten batch and patch sequences to matrix rows: (B * N_patches, Feature_Dim)
+        flat_features = (
+            target_encodings.reshape(-1, target_encodings.shape[-1]).detach().float()
+        )
+
+        # Center the feature vectors
+        flat_features = flat_features - flat_features.mean(dim=0, keepdim=True)
+
+        try:
+            # Perform singular value decomposition on the GPU
+            singular_values = torch.linalg.svdvals(flat_features)
+            # Normalize against peak singular value for absolute comparison scaling
+            normalized_sv = (
+                (singular_values / (singular_values[0] + 1e-8)).cpu().numpy()
+            )
+        except RuntimeError:
+            # Failsafe hook if matrix decomposition conditions break on unstable gradient step
+            return None
+
+        # Build native Plotly trace
+        fig = go.Figure()
+        fig.add_trace(
+            go.Scatter(
+                x=list(range(len(normalized_sv))),
+                y=normalized_sv,
+                mode="lines+markers",
+                name="Singular Value Decay",
+                line=dict(color="indigo", width=2.5),
+                marker=dict(size=4),
+            )
+        )
+
+        fig.update_layout(
+            title="Latent Space Singular Value Distribution (SIGReg Health Check)",
+            xaxis_title="Dimension Feature Index",
+            yaxis_title="Normalized Singular Value Magnitude",
+            template="plotly_white",
+            hovermode="x unified",
+        )
+        return fig
 
     @override
     def train_epoch(
@@ -59,6 +99,8 @@ class IJEPATrainer(BaseTrainer[IJEPA, MultimodalMartianLandslideSample]):
         epoch: int,
     ) -> None:
         batch: MultimodalMartianLandslideSample
+        model.train()
+
         for batch in dataloader:
             ids_keep, ids_drop = generate_uniform_mask(
                 mask_ratio=self._mask_ratio, n_patches=model.context_encoder.n_patches
@@ -68,22 +110,27 @@ class IJEPATrainer(BaseTrainer[IJEPA, MultimodalMartianLandslideSample]):
                 ids_keep=ids_keep,
                 ids_drop=ids_drop,
                 device=device,
-                pos_emb=model.context_encoder.pos_emb,
+                pos_emb=model.context_encoder.pos_emb.detach(),
             )
             jepa_output: JEPAOutput[torch.Tensor, IJEPALoss] = model(x=x, y=y, z=z)
             optimizer.zero_grad()
             if jepa_output.loss is not None:
                 jepa_output.loss.total.backward()
-                print(f"Loss:\n{jepa_output.loss.to_dict()}")
                 optimizer.step()
+
+                # Standard scalar telemetry logging
                 self._wandb.log(
                     {
-                        "loss/total": jepa_output.loss.total,
-                        "loss/sigreg": jepa_output.loss.sigreg,
-                        "loss/pred": jepa_output.loss.pred,
+                        "train/loss/total": jepa_output.loss.total.item(),
+                        "train/loss/sigreg": jepa_output.loss.sigreg.item(),
+                        "train/loss/pred": jepa_output.loss.pred.item(),
+                        "train/mask_ratio": self._mask_ratio,
+                        "train/epoch": epoch,
                     }
                 )
-        print(f"Trained epoch {epoch}")
+
+        # Update the masking ratio after every epoch
+        self._mask_ratio += self._delta_mask_ratio
 
     @override
     def evaluate(
@@ -91,8 +138,10 @@ class IJEPATrainer(BaseTrainer[IJEPA, MultimodalMartianLandslideSample]):
         model: IJEPA,
         dataloader: DataLoader[MultimodalMartianLandslideSample],
         device: torch.device,
-    ):
+    ) -> None:
+        model.eval()
         batch: MultimodalMartianLandslideSample = next(iter(dataloader))
+
         ids_keep, ids_drop = generate_uniform_mask(
             mask_ratio=self._mask_ratio, n_patches=model.context_encoder.n_patches
         )
@@ -103,7 +152,41 @@ class IJEPATrainer(BaseTrainer[IJEPA, MultimodalMartianLandslideSample]):
             device=device,
             pos_emb=model.context_encoder.pos_emb,
         )
-        with torch.inference_mode():
+
+        with torch.no_grad():
             jepa_output: JEPAOutput[torch.Tensor, IJEPALoss] = model(x=x, y=y, z=z)
-        self._wandb.log({"val/loss/total": jepa_output.loss.total})  # type: ignore
-        print("Evaluation complete")
+
+            # --- 1. Compute Prediction Alignment Metric (Cosine Similarity) ---
+            # Evaluates how well the predictor fills in representation context
+            pred = jepa_output.prediction
+            target = jepa_output.target_encoding
+
+            # Match tensor shapes if sequence matching is cropped
+            if pred.shape[1] != target.shape[1]:
+                target = target[:, : pred.shape[1], :]
+
+            cos_sim = F.cosine_similarity(pred, target, dim=-1).mean().item()
+
+            # --- 2. Compute Latent Vector Column-Wise Variance ---
+            flat_target = jepa_output.target_encoding.reshape(
+                -1, jepa_output.target_encoding.shape[-1]
+            )
+            latent_std = flat_target.std(dim=0).mean().item()
+
+        # Build the interactive validation chart
+        svd_plotly_fig = self._generate_svd_chart(jepa_output.target_encoding)
+
+        # Build log payload dictionary
+        metrics_payload: dict[str, Any] = {
+            "val/loss/total": jepa_output.loss.total.item(),  # type: ignore
+            "val/loss/sigreg": jepa_output.loss.sigreg.item(),  # type: ignore
+            "val/loss/pred": jepa_output.loss.pred.item(),  # type: ignore
+            "val/diagnostics/prediction_cosine_similarity": cos_sim,
+            "val/diagnostics/latent_dimension_std": latent_std,
+        }
+
+        # Inject interactive figure if matrix conversion succeeded
+        if svd_plotly_fig is not None:
+            metrics_payload["val/plots/singular_value_distribution"] = svd_plotly_fig
+
+        self._wandb.log(metrics_payload)

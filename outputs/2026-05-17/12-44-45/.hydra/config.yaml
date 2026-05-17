@@ -1,0 +1,40 @@
+data:
+  root_dir: /mnt/toshiba_hdd/code/robot-navigation/marsls-seg/data/marsls-seg/mmlsv2
+  params_file: /mnt/toshiba_hdd/code/robot-navigation/marsls-seg/data/configs/mmls_norm.yaml
+training:
+  batch_size: 32
+  lr: 0.0001
+  num_workers: 4
+  pin_memory: true
+  eval_int: 1
+wandb:
+  project: mars-landslide-jepa
+  mode: online
+model:
+  _target_: marsls_seg.utils.modules.jepa.ijepa.IJEPA
+  sigreg_lambda: 0.15
+  encoder:
+    _target_: marsls_seg.utils.modules.vit.VisionTransformer
+    dim: 512
+    n_heads: 8
+    n_layers: 6
+    patch_size: 16
+    img_size: 128
+    n_channels: 7
+    n_groups: 4
+  predictor:
+    _target_: marsls_seg.utils.modules.tf.decoder.TransformerDecoder
+    dim: 512
+    n_heads: 8
+    n_layers: 4
+    n_groups: 4
+  sigreg:
+    _target_: marsls_seg.utils.modules.sigreg.SIGReg
+    n_directions: 1024
+    knots: 17
+trainer:
+  _target_: marsls_seg.utils.train.ijepa.IJEPATrainer
+  mask_ratio:
+  - 0.6
+  - 0.6
+  n_epochs: 50

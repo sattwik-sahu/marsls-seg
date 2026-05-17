@@ -43,7 +43,7 @@ class VisionTransformer(torch.nn.Module):
             stride=self._patch_size,
         )
         self._pos_emb = torch.nn.Parameter(
-            torch.randn(self._n_patches, self._dim) * 0.05
+            torch.randn(self._n_patches, self._dim) * 0.02
         )
         self._encoder = TransformerEncoder(
             n_layers=self._n_layers,
@@ -60,8 +60,11 @@ class VisionTransformer(torch.nn.Module):
     def n_patches(self) -> int:
         return self._n_patches
 
-    def forward(self, x: ViTInput) -> torch.Tensor:
-        image = x.image
+    def forward(self, x: ViTInput | torch.Tensor) -> torch.Tensor:
+        if not isinstance(x, torch.Tensor):
+            image = x.image
+        else:
+            image = x
 
         if image.ndim == 3:
             image = image.unsqueeze(0)

@@ -39,7 +39,10 @@ class MultimodalMartianLandslideSample(TensorClass):
         Returns:
             torch.Tensor: The merged multi-channel image.
         """
-        return torch.cat([self.get(key) for key in self.keys()], dim=-1)
+        return torch.cat(
+            [self.get(key) for key in self.exclude("label", inplace=False).keys()],
+            dim=1,
+        )
 
 
 type SplitName = Literal["train", "val", "test"]

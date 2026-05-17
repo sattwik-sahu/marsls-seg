@@ -6,6 +6,16 @@ from marsls_seg.utils.modules.tf.decoder import TransformerDecoder
 from typing_extensions import override
 
 
+class TransformerDecoderPredictor(torch.nn.Module):
+    def __init__(self, decoder: TransformerDecoder) -> None:
+        super().__init__()
+        self._decoder = decoder
+
+    @override
+    def forward(self, s_x: torch.Tensor, z: torch.Tensor) -> torch.Tensor:
+        return self._decoder(tgt=z, mem=s_x)
+
+
 class IJEPALoss(JEPALoss):
     sigreg: torch.Tensor
     pred: torch.Tensor
@@ -41,7 +51,8 @@ class IJEPA(
         loss_pred = torch.nn.functional.mse_loss(s_y_hat, s_y)
 
         # Calculate SIGReg loss
-        loss_sigreg = self._sigreg(s_x)
+        # Transpose batch and token dims
+        loss_sigreg = self._sigreg(s_x.transpose(0, 1))
 
         # Calculate total loss
         loss_total = (

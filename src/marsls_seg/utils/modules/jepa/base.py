@@ -1,8 +1,11 @@
-import torch
-from tensordict import TensorDict, TensorClass
-from typing_extensions import override
-from typing import Optional
+from __future__ import annotations
+
 from abc import ABC, abstractmethod
+from typing import Optional
+
+import torch
+from tensordict import TensorClass, TensorDict
+from typing_extensions import override
 
 
 class JEPALoss(TensorClass):
@@ -62,24 +65,16 @@ class BaseJEPA[
 
     @override
     def forward(self, x: TInput, y: TInput, z: TLatent) -> JEPAOutput[TEncoding, TLoss]:
-        s_x: TEncoding
-        s_y: TEncoding
-        if self._shared_weight:
-            s_x, s_y = torch.chunk(
-                self._context_encoder(torch.cat([x, y], dim=0)),  # type: ignore
-                chunks=2,
-            )  # type: ignore
-        else:
-            s_x = self._context_encoder(x)
-            s_y = self._target_encoder(y)
+        s_x: TEncoding = self._context_encoder(x)
+        s_y: TEncoding = self._target_encoder(y)
 
-        s_y_hat: TEncoding = self._predictor(s_x, z)
+        s_y_hat: TEncoding = self._predictor(s_x=s_x, z=z)
 
         jepa_output = JEPAOutput(
             context_encoding=s_x, target_encoding=s_y, prediction=s_y_hat, loss=None
         )
 
-        if self.training:
-            jepa_output.loss = self._calculate_loss(s_x=s_x, s_y=s_y, s_y_hat=s_y_hat)
+        # if self.training:
+        jepa_output.loss = self._calculate_loss(s_x=s_x, s_y=s_y, s_y_hat=s_y_hat)
 
         return jepa_output

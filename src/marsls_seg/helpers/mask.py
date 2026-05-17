@@ -28,7 +28,8 @@ def generate_uniform_mask(
 def construct_latent(
     z_full: torch.Tensor, ids: torch.Tensor, batch_size: int | None = None
 ) -> torch.Tensor:
-    z = z_full[ids]
+    z = z_full
+    # z = z_full[ids]
     if batch_size is not None:
         z = z.unsqueeze(0).expand(batch_size, *z.shape)
     return z
