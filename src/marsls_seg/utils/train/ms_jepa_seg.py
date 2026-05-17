@@ -259,7 +259,7 @@ def validate(segmentation, encoder, loader, d_fn, b_fn, config):
 
 def main():
     # train(weights_dir=Path("data/runs/ms-jepa/20260224-135544"))
-    train(weights_dir=Path("data/runs/ms-jepa-sw/20260302-155142_rosy-energy-130"))
+    train(weights_dir=Path("data/runs/ms-jepa/20260511-172652_rare-snowball-146"))
 
 
 if __name__ == "__main__":

@@ -25,7 +25,7 @@ class MarsLS_Sample(TypedDict):
     """Segmentation mask"""
 
 
-type _SplitName = Literal["train", "test", "val"]
+_SplitName = Literal["train", "test", "val"]
 
 
 class MarsLS_Dataset(Sized, torch.utils.data.Dataset[MarsLS_Sample]):

@@ -1,0 +1,83 @@
+data:
+  root_dir: /home/moonlab/Downloads/Mars_data/Mars_LSc_2025_dataset_1st_phase
+  phase: 1
+  weights_dir: data/runs/ms-jepa-sw
+  image_size: 128
+  feature_info:
+    - layer: &rgb
+        name: rgb
+        n_channels: 3
+        mean:
+          - 116.2160
+          - 90.2305
+          - 87.7363
+        std:
+          - 43.9571
+          - 50.5736
+          - 55.8984
+    - layer: &gray
+        name: gray
+        n_channels: 1
+        mean:
+          - 125.8956
+        std:
+          - 20.7186
+    - layer: &dem
+        name: dem
+        n_channels: 1
+        mean:
+          - 899.3688
+        std:
+          - 3125.3127
+    - layer: &slope
+        name: slope
+        n_channels: 1
+        mean:
+          - 12.0029
+        std:
+          - 10.7907
+    - layer: &thermal_inertial
+        name: thermal_inertial
+        n_channels: 1
+        mean:
+          - 124.9178
+        std:
+          - 124.9178
+
+model:
+  dim: 256
+  patch_size: 8
+  encoder:
+    n_heads: 4
+    n_layers: 12
+  predictor:
+    n_heads: 4
+    n_layers: 9
+  feature_layers:
+    vision:
+      - *rgb
+      - *gray
+    physics:
+      - *dem
+      - *slope
+      - *thermal_inertial
+
+training:
+  encoder:
+    lr: 0.0001
+    weight_decay: 0.05
+  predictor:
+    lr: 0.00015
+    weight_decay: 0.05
+  lr_scheduler:
+    start_factor: 0.05
+    end_factor: 1.0
+    n_warmup_epochs: 50
+    eta_min: 0.00005
+  mask_ratio:
+    start: 0.3
+    end: 0.75
+  lambda: 0.07
+  grad_clip_norm: 1.0
+  batch_size: 256
+  n_epochs: 3000

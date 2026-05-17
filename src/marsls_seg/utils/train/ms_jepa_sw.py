@@ -421,3 +421,20 @@ def train(config_path: Path, pretrained_path: Path | None = None):
         with open(weights_save_dir / "config.yaml", "w") as f:
             yaml.safe_dump(config, f)
         wandb.finish()
+
+
+
+
+if __name__ == "__main__":
+    import argparse
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--config-path", type=Path, required=True)
+    parser.add_argument("--pretrained-path", type=Path, default=None)
+
+    args = parser.parse_args()
+
+    train(
+        config_path=args.config_path,
+        pretrained_path=args.pretrained_path,
+    )
