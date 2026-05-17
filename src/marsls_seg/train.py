@@ -25,7 +25,7 @@ from rich.progress import (
 from marsls_seg.utils.train.base import BaseTrainer
 
 
-class ProcessedMMLDv2Dataset(
+class ProcessedMMLSv2Dataset(
     torch.utils.data.Dataset[MultimodalMartianLandslideSample]
 ):
     def __init__(
@@ -60,7 +60,9 @@ def main(cfg: DictConfig) -> None:
 
     # Create processor
     console.log(f"Initializing processor: [magenta]{cfg.data.processor._target_}[/]")
-    processor = hydra.utils.instantiate(cfg.data.processor)
+    processor: MultimodalMarsLandslideDataProcessor = hydra.utils.instantiate(
+        cfg.data.processor
+    )
 
     # Create datasets
     train_data = MultimodalMartianLandslideDataset(
@@ -71,8 +73,8 @@ def main(cfg: DictConfig) -> None:
     )
 
     # Wrap the raw datasets with your processor to apply channel normalization
-    processed_train_dataset = ProcessedMMLDv2Dataset(train_data, processor)
-    processed_val_dataset = ProcessedMMLDv2Dataset(val_data, processor)
+    processed_train_dataset = ProcessedMMLSv2Dataset(train_data, processor)
+    processed_val_dataset = ProcessedMMLSv2Dataset(val_data, processor)
 
     # Create dataloaders using the normalized datasets
     train_loader = torch.utils.data.DataLoader[MultimodalMartianLandslideSample](

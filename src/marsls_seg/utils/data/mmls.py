@@ -125,6 +125,3 @@ class MultimodalMartianLandslideDataset(
             rgb=image[MultimodalMartianLandslideDataset._RGB_INDEX],
             label=label,
         )
-
-
-

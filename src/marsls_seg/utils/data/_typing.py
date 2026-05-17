@@ -3,6 +3,9 @@ from typing import Literal
 import torch
 from tensordict import TensorClass
 
+from dataclasses import dataclass
+from typing import Self
+
 
 class MultimodalMartianLandslideSample(TensorClass):
     """
