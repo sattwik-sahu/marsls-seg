@@ -1,9 +1,10 @@
+from typing import Optional
+
 import torch
 from einops import rearrange, repeat
+from tensordict import TensorClass
 
 from marsls_seg.utils.modules.tf.encoder import TransformerEncoder
-from tensordict import TensorClass
-from typing import Optional
 
 
 class ViTInput(TensorClass):
@@ -60,7 +61,7 @@ class VisionTransformer(torch.nn.Module):
     def n_patches(self) -> int:
         return self._n_patches
 
-    def forward(self, x: ViTInput | torch.Tensor) -> torch.Tensor:
+    def forward(self, x: ViTInput) -> torch.Tensor:
         if not isinstance(x, torch.Tensor):
             image = x.image
         else:
