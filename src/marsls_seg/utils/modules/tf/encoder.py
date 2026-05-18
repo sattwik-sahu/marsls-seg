@@ -1,7 +1,7 @@
 import torch
 
 from marsls_seg.utils.modules.tf.activation import SwiGLU
-from marsls_seg.utils.modules.tf.attention import AttentionOutput, MultiheadAttention
+from marsls_seg.utils.modules.tf.attention import MultiheadAttention
 
 
 class TransformerEncoderBlock(torch.nn.Module):
@@ -27,10 +27,8 @@ class TransformerEncoderBlock(torch.nn.Module):
         x_norm1 = self._norm1(x)
 
         # Multi-head attention and residual
-        mha_output: AttentionOutput = self._mha(
-            query=x_norm1, key=x_norm1, value=x_norm1
-        )
-        x = x + mha_output.x_out
+        mha_output: torch.Tensor = self._mha(query=x_norm1, key=x_norm1, value=x_norm1)
+        x = x + mha_output
 
         # Normalization 2
         x_norm2 = self._norm2(x)

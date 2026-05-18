@@ -1,24 +1,22 @@
-_target_: marsls_seg.utils.modules.jepa.ijepa.IJEPA
-sigreg_lambda: 0.05
+_target_: marsls_seg.utils.modules.ijepa.jepa.IJEPA
+sigreg_lambda: 0.02
 
 encoder:
-  _target_: marsls_seg.utils.modules.vit.VisionTransformer
-  dim: 256
-  n_heads: 16
-  n_layers: 6
+  _target_: marsls_seg.utils.modules.ijepa.encoder.IJEPAEncoder
+  dim: 128
+  n_heads: 8
+  n_layers: 12
   patch_size: 8
   img_size: 128
   n_channels: 7
   n_groups: 4
 
 predictor:
-  _target_: marsls_seg.utils.modules.jepa.ijepa.TransformerDecoderPredictor
-  decoder:
-    _target_: marsls_seg.utils.modules.tf.decoder.TransformerDecoder
-    dim: 256
-    n_heads: 16
-    n_layers: 4
-    n_groups: 4
+  _target_: marsls_seg.utils.modules.ijepa.predictor.IJEPAPredictor
+  dim: 128
+  n_heads: 8
+  n_layers: 4
+  n_groups: 4
 
 sigreg:
   _target_: marsls_seg.utils.modules.sigreg.SIGReg
