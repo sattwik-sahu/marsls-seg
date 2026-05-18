@@ -45,7 +45,7 @@ class ProcessedMMLSv2Dataset(
         return self._processor(self._dataset[index])
 
 
-@hydra.main(version_base=None, config_path="../configs", config_name="config")
+@hydra.main(version_base=None, config_path="../configs", config_name="pretrain")
 def main(cfg: DictConfig) -> None:
     timestamp = get_timestamp_now()
     console = Console()

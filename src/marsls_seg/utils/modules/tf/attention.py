@@ -1,15 +1,7 @@
-from typing import Any
+import math
 
 import torch
-from tensordict import tensorclass
-import math
 from einops import rearrange, repeat
-
-
-@tensorclass
-class AttentionOutput:
-    x_out: torch.Tensor
-    attention_score: torch.Tensor
 
 
 class MultiheadAttention(torch.nn.Module):
@@ -21,22 +13,26 @@ class MultiheadAttention(torch.nn.Module):
         dim: int,
         dim_embed: int | None = None,
         n_groups: int | None = None,
+        p_dropout: float = 0.0,
     ) -> None:
         """
         Create a multi-head attention block.
 
         Args:
-            n_heads (int): The number of heads.
+            n_heads (int): The number of heads in the query.
             dim (int): The input dimension.
             dim_embed (int): The embedding dimension used for attention computation.
                 If not specified, defaults to the input dimension.
             n_groups (int): The number of groups for grouped-query attention.
+                It is equal to the number of KV heads.
+            p_dropout (float): The attention dropout rate.
         """
         super().__init__()
 
         self._n_heads: int = n_heads
         self._dim: int = dim
         self._dim_embed: int = dim_embed or dim
+        self._p_dropout: float = p_dropout
 
         assert self._dim_embed % self._n_heads == 0, (
             f"dim_embed (got {dim_embed}) should be divisible by n_heads (got {n_heads})"
@@ -65,16 +61,11 @@ class MultiheadAttention(torch.nn.Module):
     def _split_into_grouped_heads(self, x: torch.Tensor) -> torch.Tensor:
         # Split raw channels into grouped head chunks
         x = rearrange(x, "b s (ng dh) -> b ng s dh", ng=self._n_groups)
-
-        # Expand groups contiguously repeating chunks
-        x = repeat(
-            x, "b ng s dh -> b (ng rep) s dh", rep=self._n_heads // self._n_groups
-        )
         return x
 
     def forward(
         self, query: torch.Tensor, key: torch.Tensor, value: torch.Tensor
-    ) -> AttentionOutput:
+    ) -> torch.Tensor:
         # Obtain query, key, value
         x_query: torch.Tensor = self._W_query(query)
         x_key: torch.Tensor = self._W_key(key)
@@ -85,15 +76,16 @@ class MultiheadAttention(torch.nn.Module):
         x_key = self._split_into_grouped_heads(x=x_key)
         x_value = self._split_into_grouped_heads(x=x_value)
 
-        # Calculate attention score
-        score = x_query @ x_key.transpose(-2, -1) / math.sqrt(self._head_dim)
-        attention_score = torch.softmax(score, dim=-1)
-
-        # Calculate output
-        x_out = attention_score @ x_value
+        x_out: torch.Tensor = torch.nn.functional.scaled_dot_product_attention(
+            query=x_query,
+            key=x_key,
+            value=x_value,
+            dropout_p=self._p_dropout,
+            enable_gqa=True,
+        )
 
         # Merge attention output heads back into one
         x_out = rearrange(x_out, "b h n d -> b n (h d)")
         x_out = self._W_out(x_out)
 
-        return AttentionOutput(attention_score=attention_score, x_out=x_out)
+        return x_out

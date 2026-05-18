@@ -6,18 +6,21 @@ import torch.nn.functional as F
 from torch.optim import Optimizer
 from torch.utils.data.dataloader import DataLoader
 
-from marsls_seg.helpers.mask import generate_uniform_mask
+from marsls_seg.helpers.mask import MaskingRatioScheduler, generate_uniform_mask
 from marsls_seg.utils.data.mmls import (
     MultimodalMartianLandslideSample,
 )
+
+# from marsls_seg.utils.modules.ijepa.jepa import IJEPA, IJEPALoss
+from marsls_seg.utils.modules.ijepa.jepa import IJEPA, IJEPALoss
+from marsls_seg.utils.modules.ijepa._typing import IJEPAOutput
 from marsls_seg.utils.modules.jepa.base import JEPAOutput
-from marsls_seg.utils.modules.jepa.ijepa import IJEPA, IJEPALoss
 from marsls_seg.utils.modules.vit import ViTInput
 from marsls_seg.utils.train.base import BaseTrainer
 from wandb import Run
 
 
-class IJEPATrainer(BaseTrainer[IJEPA, MultimodalMartianLandslideSample]):
+class IJEPATrainer(BaseTrainer[IJEPA, MultimodalMartianLandslideSample, dict]):
     """
     IJEPA style trainer for ViT on fat images from MMLSv2 dataset
     with advanced interactive latent space diagnostics.
@@ -28,8 +31,10 @@ class IJEPATrainer(BaseTrainer[IJEPA, MultimodalMartianLandslideSample]):
     ) -> None:
         super().__init__()
 
-        self._mask_ratio: float = mask_ratio[0]
-        self._delta_mask_ratio: float = (mask_ratio[1] - mask_ratio[0]) / n_epochs
+        # self._mask_ratio: float = mask_ratio[0]
+        self._mask_ratio_scheduler: MaskingRatioScheduler = MaskingRatioScheduler(
+            start=mask_ratio[0], end=mask_ratio[1], T=n_epochs
+        )
         self._wandb = wandb
 
     def _create_x_y_z(
@@ -43,7 +48,7 @@ class IJEPATrainer(BaseTrainer[IJEPA, MultimodalMartianLandslideSample]):
         image = batch.merge_channels()
         x = ViTInput(image=image, mask=ids_keep).to(device=device)
         y = ViTInput(image=image).to(device=device)
-        z = pos_emb.unsqueeze(0).repeat(batch.batch_size[0], 1, 1)
+        z = pos_emb[ids_drop].unsqueeze(0).repeat(batch.batch_size[0], 1, 1)
         return x, y, z
 
     def _generate_svd_chart(self, target_encodings: torch.Tensor) -> go.Figure | None:
@@ -97,40 +102,51 @@ class IJEPATrainer(BaseTrainer[IJEPA, MultimodalMartianLandslideSample]):
         optimizer: Optimizer,
         device: torch.device,
         epoch: int,
-    ) -> None:
+    ) -> dict:
         batch: MultimodalMartianLandslideSample
         model.train()
 
         for batch in dataloader:
             ids_keep, ids_drop = generate_uniform_mask(
-                mask_ratio=self._mask_ratio, n_patches=model.context_encoder.n_patches
+                mask_ratio=self._mask_ratio_scheduler.value,
+                n_patches=model.context_encoder.encoder.n_patches,
             )
             x, y, z = self._create_x_y_z(
                 batch=batch,
                 ids_keep=ids_keep,
                 ids_drop=ids_drop,
                 device=device,
-                pos_emb=model.context_encoder.pos_emb.detach(),
+                pos_emb=model.context_encoder.encoder.pos_emb,
             )
-            jepa_output: JEPAOutput[torch.Tensor, IJEPALoss] = model(x=x, y=y, z=z)
-            optimizer.zero_grad()
-            if jepa_output.loss is not None:
-                jepa_output.loss.total.backward()
-                optimizer.step()
 
-                # Standard scalar telemetry logging
-                self._wandb.log(
-                    {
-                        "train/loss/total": jepa_output.loss.total.item(),
-                        "train/loss/sigreg": jepa_output.loss.sigreg.item(),
-                        "train/loss/pred": jepa_output.loss.pred.item(),
-                        "train/mask_ratio": self._mask_ratio,
-                        "train/epoch": epoch,
-                    }
-                )
+            optimizer.zero_grad()
+
+            with torch.amp.autocast(device_type="cuda", dtype=torch.bfloat16):  # type: ignore
+                jepa_output: IJEPAOutput = model(x=x, y=y, z=z)
+                jepa_output.loss.total.backward()
+
+            optimizer.step()
+
+            # Standard scalar telemetry logging
+            self._wandb.log(
+                {
+                    "train/loss/total": jepa_output.loss.total.item(),
+                    "train/loss/sigreg": jepa_output.loss.sigreg.item(),
+                    "train/loss/pred": jepa_output.loss.pred.item(),
+                    "train/mask_ratio": self._mask_ratio_scheduler.value,
+                    "train/epoch": epoch,
+                }
+            )
 
         # Update the masking ratio after every epoch
-        self._mask_ratio += self._delta_mask_ratio
+        self._mask_ratio_scheduler.step()
+
+        # Return some stuff to log
+        return dict(
+            loss=jepa_output.loss.total.item(),  # type: ignore
+            loss_sigreg=jepa_output.loss.sigreg.item(),  # type: ignore
+            loss_pred=jepa_output.loss.pred.item(),  # type: ignore
+        )
 
     @override
     def evaluate(
@@ -143,28 +159,29 @@ class IJEPATrainer(BaseTrainer[IJEPA, MultimodalMartianLandslideSample]):
         batch: MultimodalMartianLandslideSample = next(iter(dataloader))
 
         ids_keep, ids_drop = generate_uniform_mask(
-            mask_ratio=self._mask_ratio, n_patches=model.context_encoder.n_patches
+            mask_ratio=self._mask_ratio_scheduler.value,
+            n_patches=model.context_encoder.n_patches,
         )
         x, y, z = self._create_x_y_z(
             batch=batch,
             ids_keep=ids_keep,
             ids_drop=ids_drop,
             device=device,
-            pos_emb=model.context_encoder.pos_emb,
+            pos_emb=model.context_encoder.encoder.pos_emb,
         )
 
         with torch.no_grad():
             jepa_output: JEPAOutput[torch.Tensor, IJEPALoss] = model(x=x, y=y, z=z)
 
             # --- 1. Compute Prediction Alignment Metric (Cosine Similarity) ---
-            # Evaluates how well the predictor fills in representation context
-            pred = jepa_output.prediction
-            target = jepa_output.target_encoding
+            pred = jepa_output.prediction  # Shape: (B, num_drop, dim)
 
-            # Match tensor shapes if sequence matching is cropped
-            if pred.shape[1] != target.shape[1]:
-                target = target[:, : pred.shape[1], :]
+            # Use the sorted ids_drop to select the exact ground-truth patches
+            target = jepa_output.target_encoding[
+                :, ids_drop
+            ]  # Shape: (B, num_drop, dim)
 
+            # Both match in sequence order and point to identical patch indices!
             cos_sim = F.cosine_similarity(pred, target, dim=-1).mean().item()
 
             # --- 2. Compute Latent Vector Column-Wise Variance ---
