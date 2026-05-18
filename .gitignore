@@ -179,3 +179,4 @@ pyrightconfig.json
 /notebooks/
 /.vscode/
 /wandb/
+/outputs/
