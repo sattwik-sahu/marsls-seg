@@ -15,7 +15,9 @@ from marsls_seg.utils.data.mmls import (
 from marsls_seg.utils.modules.ijepa.jepa import IJEPA, IJEPALoss
 from marsls_seg.utils.modules.ijepa._typing import IJEPAOutput
 from marsls_seg.utils.modules.jepa.base import JEPAOutput
-from marsls_seg.utils.modules.vit import ViTInput
+from marsls_seg.utils.modules.encoder.patch_masking_vit import (
+    PatchMaskingViTInput as ViTInput,
+)
 from marsls_seg.utils.train.base import BaseTrainer
 from wandb import Run
 
