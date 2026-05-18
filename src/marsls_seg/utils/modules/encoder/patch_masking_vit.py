@@ -3,6 +3,7 @@ from einops import rearrange, repeat
 
 from marsls_seg.utils.modules.tf.encoder import TransformerEncoder
 from tensordict import TensorClass
+from marsls_seg.utils.modules.encoder.base import BaseImageEncoder
 
 
 class PatchMaskingViTInput(TensorClass):
