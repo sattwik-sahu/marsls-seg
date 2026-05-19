@@ -3,7 +3,7 @@ from typing import Any, override
 import plotly.graph_objects as go
 import torch
 import torch.nn.functional as F
-from torch.optim import Optimizer
+from torch.optim.optimizer import Optimizer as Optimizer
 from torch.utils.data.dataloader import DataLoader
 
 from marsls_seg.helpers.mask import MaskingRatioScheduler, generate_uniform_mask
@@ -19,7 +19,9 @@ from marsls_seg.utils.modules.encoder.patch_masking_vit import (
     PatchMaskingViTInput as ViTInput,
 )
 from marsls_seg.utils.train.base import BaseTrainer
-from wandb import Run
+from wandb import Run as WandbRun
+from omegaconf import DictConfig
+from transformers import get_cosine_schedule_with_warmup
 
 
 class IJEPATrainer(BaseTrainer[IJEPA, MultimodalMartianLandslideSample, dict]):
@@ -29,15 +31,35 @@ class IJEPATrainer(BaseTrainer[IJEPA, MultimodalMartianLandslideSample, dict]):
     """
 
     def __init__(
-        self, mask_ratio: tuple[float, float], n_epochs: int, wandb: Run
+        self,
+        model: IJEPA,
+        mask_ratio: tuple[float, float],
+        lr: float,
+        n_epochs: int,
+        n_warmup_epochs: int,
+        wandb: WandbRun,
+        device: torch.device,
     ) -> None:
-        super().__init__()
+        super().__init__(
+            model=model,
+            n_epochs=n_epochs,
+            lr=lr,
+            wandb=wandb,
+            device=device,
+        )
 
-        # self._mask_ratio: float = mask_ratio[0]
         self._mask_ratio_scheduler: MaskingRatioScheduler = MaskingRatioScheduler(
             start=mask_ratio[0], end=mask_ratio[1], T=n_epochs
         )
-        self._wandb = wandb
+
+        # Create a cosine annealing with linear warmup lr scheduler
+        self._lr_scheduler: torch.optim.lr_scheduler.LRScheduler = (
+            get_cosine_schedule_with_warmup(
+                optimizer=self._optimizer,
+                num_warmup_steps=n_warmup_epochs,
+                num_training_steps=self._n_epochs,
+            )
+        )
 
     def _create_x_y_z(
         self,
@@ -97,37 +119,38 @@ class IJEPATrainer(BaseTrainer[IJEPA, MultimodalMartianLandslideSample, dict]):
         return fig
 
     @override
+    def _create_optimizer(self, model: IJEPA) -> Optimizer:
+        return torch.optim.AdamW(params=model.parameters(), lr=self._lr)
+
+    @override
     def train_epoch(
         self,
-        model: IJEPA,
         dataloader: DataLoader[MultimodalMartianLandslideSample],
-        optimizer: Optimizer,
-        device: torch.device,
         epoch: int,
     ) -> dict:
         batch: MultimodalMartianLandslideSample
-        model.train()
+        self._model.train()
 
         for batch in dataloader:
             ids_keep, ids_drop = generate_uniform_mask(
                 mask_ratio=self._mask_ratio_scheduler.value,
-                n_patches=model.context_encoder.n_patches,
+                n_patches=self._model.context_encoder.n_patches,
             )
             x, y, z = self._create_x_y_z(
                 batch=batch,
                 ids_keep=ids_keep,
                 ids_drop=ids_drop,
-                device=device,
-                pos_emb=model.context_encoder.pos_emb,
+                device=self._device,
+                pos_emb=self._model.context_encoder.pos_emb,
             )
 
-            optimizer.zero_grad()
+            self._optimizer.zero_grad()
 
             with torch.amp.autocast(device_type="cuda", dtype=torch.bfloat16):  # type: ignore
-                jepa_output: IJEPAOutput = model(x=x, y=y, z=z)
+                jepa_output: IJEPAOutput = self._model(x=x, y=y, z=z)
                 jepa_output.loss.total.backward()
 
-            optimizer.step()
+            self._optimizer.step()
 
             # Standard scalar telemetry logging
             self._wandb.log(
@@ -137,43 +160,48 @@ class IJEPATrainer(BaseTrainer[IJEPA, MultimodalMartianLandslideSample, dict]):
                     "train/loss/pred": jepa_output.loss.pred.item(),
                     "train/mask_ratio": self._mask_ratio_scheduler.value,
                     "train/epoch": epoch,
+                    "train/lr": self._lr_scheduler.get_last_lr()[0],
                 }
             )
 
         # Update the masking ratio after every epoch
         self._mask_ratio_scheduler.step()
 
+        # Update the learning rate
+        self._lr_scheduler.step()
+
         # Return some stuff to log
         return dict(
             loss=jepa_output.loss.total.item(),  # type: ignore
             loss_sigreg=jepa_output.loss.sigreg.item(),  # type: ignore
             loss_pred=jepa_output.loss.pred.item(),  # type: ignore
+            lr=self._lr_scheduler.get_last_lr()[0],
         )
 
     @override
     def evaluate(
         self,
-        model: IJEPA,
         dataloader: DataLoader[MultimodalMartianLandslideSample],
-        device: torch.device,
     ) -> None:
-        model.eval()
+        self._model.eval()
         batch: MultimodalMartianLandslideSample = next(iter(dataloader))
 
         ids_keep, ids_drop = generate_uniform_mask(
             mask_ratio=self._mask_ratio_scheduler.value,
-            n_patches=model.context_encoder.n_patches,
+            n_patches=self._model.context_encoder.n_patches,
         )
         x, y, z = self._create_x_y_z(
             batch=batch,
             ids_keep=ids_keep,
             ids_drop=ids_drop,
-            device=device,
-            pos_emb=model.context_encoder.pos_emb,
+            device=self._device,
+            pos_emb=self._model.context_encoder.pos_emb,
         )
 
         with torch.no_grad():
-            jepa_output: JEPAOutput[torch.Tensor, IJEPALoss] = model(x=x, y=y, z=z)
+            jepa_output: JEPAOutput[torch.Tensor, IJEPALoss] = self._model(
+                x=x, y=y, z=z
+            )
 
             # --- 1. Compute Prediction Alignment Metric (Cosine Similarity) ---
             pred = jepa_output.prediction  # Shape: (B, num_drop, dim)
