@@ -11,6 +11,10 @@ class BaseEncoder[TInput: TensorData, TEncoding: TensorData](torch.nn.Module, AB
 
         self._dim: int = dim
 
+    @property
+    def dim(self) -> int:
+        return self._dim
+
     @abstractmethod
     def forward(self, x: TInput) -> TEncoding:
         pass
@@ -51,4 +55,8 @@ class BaseImagePatchEncoder[TInput: TensorData](
 
     @property
     def patch_size(self) -> int:
-        return self.patch_size
+        return self._patch_size
+
+    @property
+    def n_patches(self) -> int:
+        return self._n_patches
