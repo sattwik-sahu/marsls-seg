@@ -56,7 +56,7 @@ class SMPWrapper(nn.Module, EncoderMixin):
         encodings: torch.Tensor = self._encoder(vit_input)
 
         # Define number of patches in height and width
-        hp = wp = self._encoder.n_patches
+        hp = wp = int((self._encoder.n_patches)**0.5)
 
         # Rearrange encodings to form feature maps
         feat: torch.Tensor = rearrange(
