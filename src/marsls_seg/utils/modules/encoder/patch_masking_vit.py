@@ -14,7 +14,7 @@ class PatchMaskingViTInput(TensorClass):
     """The indexes of the patches left visible after masking."""
 
 
-class PatchMaskingVisionTransformer(torch.nn.Module):
+class PatchMaskingVisionTransformer(BaseImageEncoder):
     """Vision Transformer (ViT) implementation with patch masking."""
 
     def __init__(
