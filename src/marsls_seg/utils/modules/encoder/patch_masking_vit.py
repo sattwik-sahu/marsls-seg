@@ -83,10 +83,8 @@ class PatchMaskingVisionTransformer(BaseImageEncoder):
         patch_tokens = patch_tokens + pos_emb
 
         # Apply masking if required
-        if isinstance(x, PatchMaskingViTInput) and x.mask:
-            mask: torch.Tensor = torch.zeros_like(x.image, dtype=torch.bool)
-            mask[:, x.mask] = True
-            patch_tokens = patch_tokens.where(mask, 0)
+        if isinstance(x, PatchMaskingViTInput) and x.mask.numel() > 0:
+            patch_tokens = patch_tokens[:, x.mask]
 
         # Pass through transformer encoder
         return self._encoder(patch_tokens)
