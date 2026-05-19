@@ -1,0 +1,5 @@
+_target_: marsls_seg.utils.modules.segmentation.model.SegmentationModelWithPretainedEncoder
+
+arch: unet
+encoder_ckpt_path: /mnt/toshiba_hdd/code/robot-navigation/marsls-seg/data/runs/ms-jepa/20260519-165850/ckpt_ep_500.pt
+encoder_config_path: /mnt/toshiba_hdd/code/robot-navigation/marsls-seg/data/runs/ms-jepa/20260519-165850/config.yaml

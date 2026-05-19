@@ -1,7 +1,9 @@
 defaults:
   - _self_
-  - model: ijepa
-  - trainer: ijepa
+  # - model: ijepa
+  # - trainer: ijepa
+  - model: segmentation
+  - trainer: segmentation
   - data/processor: norm
 
 data:
@@ -9,7 +11,7 @@ data:
   params_file: "/mnt/toshiba_hdd/code/robot-navigation/marsls-seg/data/configs/mmls_norm.yaml"
 
 training:
-  batch_size: 48
+  batch_size: 32
   lr: 1e-4
   num_workers: 4
   n_epochs: 500

@@ -1,3 +1,4 @@
+import re
 from pathlib import Path
 
 import hydra
@@ -5,12 +6,13 @@ import torch
 from omegaconf import DictConfig, OmegaConf
 from rich.console import Console
 from rich.progress import (
-    Progress,
-    TextColumn,
     BarColumn,
     MofNCompleteColumn,
+    Progress,
+    TextColumn,
     TimeRemainingColumn,
 )
+from torchinfo import summary
 
 import wandb
 from marsls_seg.helpers.device import DEVICE
@@ -21,12 +23,9 @@ from marsls_seg.utils.data.mmls import (
 )
 from marsls_seg.utils.data.processing import ProcessedMMLSv2Dataset
 from marsls_seg.utils.train.base import BaseTrainer
-import re
-from torchinfo import summary
-from transformers import get_cosine_schedule_with_warmup
 
 
-@hydra.main(version_base=None, config_path="../configs", config_name="pretrain")
+@hydra.main(version_base=None, config_path="../configs", config_name="config")
 def main(cfg: DictConfig) -> None:
     # Get current timestamp
     timestamp: str = get_timestamp_now()
@@ -130,12 +129,12 @@ def main(cfg: DictConfig) -> None:
 
         # Start training by epochs
         for epoch in range(1, cfg.training.n_epochs + 1):
-            log = trainer.train_epoch(dataloader=train_loader, epoch=epoch)
-            progress.log(log)
+            trainer.train_epoch(dataloader=train_loader, epoch=epoch)
 
             # Evaluate model every `eval_int` epochs
             if epoch % cfg.training.eval_int == 0:
-                trainer.evaluate(dataloader=val_loader)
+                log = trainer.evaluate(dataloader=val_loader)
+                progress.log(log)
 
             # Update progress bar by one step
             progress.update(task_id=training_task, advance=1)

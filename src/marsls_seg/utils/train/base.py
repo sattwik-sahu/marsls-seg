@@ -3,7 +3,6 @@ from abc import ABC, abstractmethod
 import torch
 from marsls_seg.utils.modules._typing import TensorData
 from wandb import Run as WandbRun
-from omegaconf import DictConfig
 
 
 class BaseTrainer[
@@ -41,9 +40,9 @@ class BaseTrainer[
     @abstractmethod
     def train_epoch(
         self, dataloader: torch.utils.data.DataLoader[TData], epoch: int
-    ) -> TLog:
+    ) -> None:
         pass
 
     @abstractmethod
-    def evaluate(self, dataloader: torch.utils.data.DataLoader[TData]):
+    def evaluate(self, dataloader: torch.utils.data.DataLoader[TData]) -> TLog:
         pass

@@ -18,7 +18,7 @@ class SMPWrapper(nn.Module, EncoderMixin):
     Wraps the IJEPA ContextEncoder to be universally compatible with segmentation_models_python
     """
 
-    def __init__(self, jepa_ckpt_path: Path, jepa_config_path: Path) -> None:
+    def __init__(self, jepa_ckpt_path: Path, jepa_config_path: Path, **kwargs) -> None:
         super().__init__()
 
         self._jepa_model: BaseImagePatchJEPA = load_model_from_ckpt(

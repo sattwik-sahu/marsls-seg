@@ -5,23 +5,23 @@ import torch
 import torch.nn.functional as F
 from torch.optim.optimizer import Optimizer as Optimizer
 from torch.utils.data.dataloader import DataLoader
+from torchvision.transforms import v2
+from transformers import get_cosine_schedule_with_warmup
 
 from marsls_seg.helpers.mask import MaskingRatioScheduler, generate_uniform_mask
 from marsls_seg.utils.data.mmls import (
     MultimodalMartianLandslideSample,
 )
-
-# from marsls_seg.utils.modules.ijepa.jepa import IJEPA, IJEPALoss
-from marsls_seg.utils.modules.ijepa.jepa import IJEPA, IJEPALoss
-from marsls_seg.utils.modules.ijepa._typing import IJEPAOutput
-from marsls_seg.utils.modules.jepa.base import JEPAOutput
 from marsls_seg.utils.modules.encoder.patch_masking_vit import (
     PatchMaskingViTInput as ViTInput,
 )
+from marsls_seg.utils.modules.ijepa._typing import IJEPAOutput
+
+# from marsls_seg.utils.modules.ijepa.jepa import IJEPA, IJEPALoss
+from marsls_seg.utils.modules.ijepa.jepa import IJEPA, IJEPALoss
+from marsls_seg.utils.modules.jepa.base import JEPAOutput
 from marsls_seg.utils.train.base import BaseTrainer
 from wandb import Run as WandbRun
-from omegaconf import DictConfig
-from transformers import get_cosine_schedule_with_warmup
 
 
 class IJEPATrainer(BaseTrainer[IJEPA, MultimodalMartianLandslideSample, dict]):
@@ -61,6 +61,16 @@ class IJEPATrainer(BaseTrainer[IJEPA, MultimodalMartianLandslideSample, dict]):
             )
         )
 
+        # Create augmentation
+        self._augmentation: v2.Compose = v2.Compose(
+            [
+                v2.RandomHorizontalFlip(p=0.5),
+                v2.RandomVerticalFlip(p=0.5),
+                v2.RandomRotation(degrees=[-90, 90]),
+                v2.RandomResizedCrop(size=(128, 128), antialias=True),
+            ]
+        )
+
     def _create_x_y_z(
         self,
         batch: MultimodalMartianLandslideSample,
@@ -70,6 +80,11 @@ class IJEPATrainer(BaseTrainer[IJEPA, MultimodalMartianLandslideSample, dict]):
         pos_emb: torch.Tensor,
     ) -> tuple[ViTInput, ViTInput, torch.Tensor]:
         image = batch.merge_channels()
+
+        # Apply augmentation while training
+        if self._model.training:
+            image = self._augmentation(image)
+
         x = ViTInput(image=image, mask=ids_keep).to(device=device)
         y = ViTInput(image=image).to(device=device)
         z = pos_emb[ids_drop].unsqueeze(0).repeat(batch.batch_size[0], 1, 1)
@@ -127,7 +142,7 @@ class IJEPATrainer(BaseTrainer[IJEPA, MultimodalMartianLandslideSample, dict]):
         self,
         dataloader: DataLoader[MultimodalMartianLandslideSample],
         epoch: int,
-    ) -> dict:
+    ) -> None:
         batch: MultimodalMartianLandslideSample
         self._model.train()
 
@@ -182,54 +197,68 @@ class IJEPATrainer(BaseTrainer[IJEPA, MultimodalMartianLandslideSample, dict]):
     def evaluate(
         self,
         dataloader: DataLoader[MultimodalMartianLandslideSample],
-    ) -> None:
+    ) -> dict[str, int | float | str | list]:
         self._model.eval()
-        batch: MultimodalMartianLandslideSample = next(iter(dataloader))
 
-        ids_keep, ids_drop = generate_uniform_mask(
-            mask_ratio=self._mask_ratio_scheduler.value,
-            n_patches=self._model.context_encoder.n_patches,
-        )
-        x, y, z = self._create_x_y_z(
-            batch=batch,
-            ids_keep=ids_keep,
-            ids_drop=ids_drop,
-            device=self._device,
-            pos_emb=self._model.context_encoder.pos_emb,
-        )
+        losses: list[IJEPALoss] = []
+        cos_sims: list[float] = []
+        latent_stds: list[float] = []
+        target_encodings: list[torch.Tensor] = []
 
-        with torch.no_grad():
-            jepa_output: JEPAOutput[torch.Tensor, IJEPALoss] = self._model(
-                x=x, y=y, z=z
+        # batch: MultimodalMartianLandslideSample = next(iter(dataloader))
+        for batch in dataloader:
+            ids_keep, ids_drop = generate_uniform_mask(
+                mask_ratio=self._mask_ratio_scheduler.value,
+                n_patches=self._model.context_encoder.n_patches,
+            )
+            x, y, z = self._create_x_y_z(
+                batch=batch,
+                ids_keep=ids_keep,
+                ids_drop=ids_drop,
+                device=self._device,
+                pos_emb=self._model.context_encoder.pos_emb,
             )
 
-            # --- 1. Compute Prediction Alignment Metric (Cosine Similarity) ---
-            pred = jepa_output.prediction  # Shape: (B, num_drop, dim)
+            with torch.no_grad():
+                jepa_output: JEPAOutput[torch.Tensor, IJEPALoss] = self._model(
+                    x=x, y=y, z=z
+                )
 
-            # Use the sorted ids_drop to select the exact ground-truth patches
-            target = jepa_output.target_encoding[
-                :, ids_drop
-            ]  # Shape: (B, num_drop, dim)
+                losses.append(jepa_output.loss.unsqueeze(0))  # type: ignore
+                target_encodings.append(jepa_output.target_encoding.detach().cpu())
 
-            # Both match in sequence order and point to identical patch indices!
-            cos_sim = F.cosine_similarity(pred, target, dim=-1).mean().item()
+                # --- 1. Compute Prediction Alignment Metric (Cosine Similarity) ---
+                pred = jepa_output.prediction  # Shape: (B, num_drop, dim)
 
-            # --- 2. Compute Latent Vector Column-Wise Variance ---
-            flat_target = jepa_output.target_encoding.reshape(
-                -1, jepa_output.target_encoding.shape[-1]
-            )
-            latent_std = flat_target.std(dim=0).mean().item()
+                # Use the sorted ids_drop to select the exact ground-truth patches
+                target = jepa_output.target_encoding[
+                    :, ids_drop
+                ]  # Shape: (B, num_drop, dim)
+
+                # Both match in sequence order and point to identical patch indices!
+                cos_sim = F.cosine_similarity(pred, target, dim=-1).mean().item()
+                cos_sims.append(cos_sim)
+
+                # --- 2. Compute Latent Vector Column-Wise Variance ---
+                flat_target = jepa_output.target_encoding.reshape(
+                    -1, jepa_output.target_encoding.shape[-1]
+                )
+                latent_std = flat_target.std(dim=0).mean().item()
+                latent_stds.append(latent_std)
 
         # Build the interactive validation chart
-        svd_plotly_fig = self._generate_svd_chart(jepa_output.target_encoding)
+        svd_plotly_fig = self._generate_svd_chart(torch.cat(target_encodings, dim=0))
 
         # Build log payload dictionary
+        mean_loss: IJEPALoss = torch.cat(losses).mean()  # type: ignore
+
         metrics_payload: dict[str, Any] = {
-            "val/loss/total": jepa_output.loss.total.item(),  # type: ignore
-            "val/loss/sigreg": jepa_output.loss.sigreg.item(),  # type: ignore
-            "val/loss/pred": jepa_output.loss.pred.item(),  # type: ignore
-            "val/diagnostics/prediction_cosine_similarity": cos_sim,
-            "val/diagnostics/latent_dimension_std": latent_std,
+            "val/loss/total": mean_loss.total.item(),  # type: ignore
+            "val/loss/sigreg": mean_loss.sigreg.item(),  # type: ignore
+            "val/loss/pred": mean_loss.pred.item(),  # type: ignore
+            "val/diagnostics/prediction_cosine_similarity": sum(cos_sims)
+            / len(cos_sims),
+            "val/diagnostics/latent_dimension_std": sum(latent_stds) / len(latent_stds),
         }
 
         # Inject interactive figure if matrix conversion succeeded
@@ -237,3 +266,9 @@ class IJEPATrainer(BaseTrainer[IJEPA, MultimodalMartianLandslideSample, dict]):
             metrics_payload["val/plots/singular_value_distribution"] = svd_plotly_fig
 
         self._wandb.log(metrics_payload)
+
+        return {
+            "loss/pred": round(mean_loss.pred.item(), 4),
+            "loss/sigreg": round(mean_loss.sigreg.item(), 4),
+            "loss/total": round(mean_loss.total.item(), 4),
+        }
