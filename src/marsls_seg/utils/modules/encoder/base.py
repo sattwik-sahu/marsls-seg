@@ -55,7 +55,7 @@ class BaseImagePatchEncoder[TInput: TensorData](
 
     @property
     def patch_size(self) -> int:
-        return self.patch_size
+        return self._patch_size
 
     @property
     def n_patches(self) -> int:

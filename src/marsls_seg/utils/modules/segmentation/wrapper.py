@@ -9,44 +9,54 @@ from marsls_seg.utils.modules.jepa.extras import BaseImagePatchJEPA
 
 from einops import rearrange
 
+from pathlib import Path
+from marsls_seg.utils.modules.load import load_model_from_ckpt
+
 
 class SMPWrapper(nn.Module, EncoderMixin):
     """
     Wraps the IJEPA ContextEncoder to be universally compatible with segmentation_models_python
     """
 
-    def __init__(self, jepa_model: BaseImagePatchJEPA):
+    def __init__(self, jepa_ckpt_path: str, jepa_config_path: str) -> None:
         super().__init__()
 
-        self.encoder: BaseImagePatchEncoder = jepa_model.context_encoder
-        self.patch_size: int = self.encoder.patch_size
-        self.dim_embed: int = self.encoder.dim
-        self._in_channels: int = self.encoder.n_channels
+        self._jepa_model: BaseImagePatchJEPA = load_model_from_ckpt(
+            ckpt_path=Path(jepa_ckpt_path),
+            config_path=Path(jepa_config_path),
+            model_class=BaseImagePatchJEPA,
+        )
+        self._encoder: BaseImagePatchEncoder = self._jepa_model.context_encoder
+        self._patch_size: int = self._encoder.patch_size
+        self._dim_embed: int = self._encoder.dim
+        self._in_channels: int = self._encoder.n_channels
 
         self._depth: int = 5
         self._output_stride: int = 16
+
+        # Required by SMP for Deeplabv3 and PAN
         self.is_dilated: bool = False
 
         self._out_channels: list[int] = [
             self._in_channels,
             self._in_channels,
             self._in_channels,
-            self.dim_embed,
-            self.dim_embed,
-            self.dim_embed,
+            self._dim_embed,
+            self._dim_embed,
+            self._dim_embed,
         ]
 
-        self.skip_dropout = nn.Dropout2d(p=0.1)
+        self._skip_dropout = nn.Dropout2d(p=0.1)
 
     def make_dilated(self, output_stride) -> None:
         self.is_dilated = True
 
     def forward(self, x: torch.Tensor) -> list[torch.Tensor]:
         vit_input = PatchMaskingViTInput(image=x)
-        encodings: torch.Tensor = self.encoder(vit_input)
+        encodings: torch.Tensor = self._encoder(vit_input)
 
         # Define number of patches in height and width
-        hp = wp = self.encoder.n_patches
+        hp = wp = self._encoder.n_patches
 
         # Rearrange encodings to form feature maps
         feat: torch.Tensor = rearrange(
@@ -54,9 +64,9 @@ class SMPWrapper(nn.Module, EncoderMixin):
         )
 
         # we will define the feature pyramid
-        f0 = self.skip_dropout(x)
-        f1 = self.skip_dropout(F.max_pool2d(f0, kernel_size=2, stride=2))
-        f2 = self.skip_dropout(F.max_pool2d(f1, kernel_size=2, stride=2))
+        f0 = self._skip_dropout(x)
+        f1 = self._skip_dropout(F.max_pool2d(f0, kernel_size=2, stride=2))
+        f2 = self._skip_dropout(F.max_pool2d(f1, kernel_size=2, stride=2))
         f3 = feat
         f4 = F.max_pool2d(f3, kernel_size=2, stride=2)
 
