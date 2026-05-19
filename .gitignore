@@ -179,4 +179,7 @@ pyrightconfig.json
 /notebooks/
 /.vscode/
 /wandb/
+
+# Hydra output folders
 /outputs/
+/multirun/
