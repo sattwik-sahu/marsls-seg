@@ -7,6 +7,7 @@ import torch
 from tensordict import TensorClass
 
 from marsls_seg.utils.modules._typing import TensorData
+from marsls_seg.utils.modules.encoder.base import BaseEncoder
 
 
 class BaseJEPALoss(TensorClass):
@@ -22,24 +23,8 @@ class BaseJEPALoss(TensorClass):
     """The total loss to be backpropagated."""
 
 
-class BaseJEPAEncoder[TInput: TensorData, TEncoding: TensorData](torch.nn.Module, ABC):
-    """Base class for a JEPA encoder."""
-
-    def __init__(self) -> None:
-        super().__init__()
-
-    @abstractmethod
-    def forward(self, x: TInput) -> TEncoding:
-        """
-        Encodes data `x` to encoding.
-
-        Args:
-            x (TInput): The input to the encoder.
-
-        Returns:
-            TEncoding: The encoder of data `x`.
-        """
-        pass
+BaseJEPAEncoder = BaseEncoder
+"""The base JEPA encoder. It is an alias for `BaseEncoder`."""
 
 
 class BaseJEPAPredictor[TEncoding: TensorData, TLatent: TensorData](
