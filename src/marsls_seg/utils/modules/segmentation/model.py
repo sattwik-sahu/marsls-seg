@@ -18,6 +18,8 @@ class SegmentationModelWithPretainedEncoder(torch.nn.Module):
 
         # The architecture of the segmentation head
         self._seg_arch: str = arch
+        self._encoder_ckpt_path: Path = encoder_ckpt_path
+        self._encoder_config_path: Path = encoder_config_path
 
         # Load the wrapper on the encoder
         self._encoder: SMPWrapper = SMPWrapper(
@@ -49,11 +51,14 @@ class SegmentationModelWithPretainedEncoder(torch.nn.Module):
                     "input_range": [0, 1],
                 }
             },
-            params={},
+            params={
+                # "jepa_ckpt_path": self._encoder_ckpt_path,
+                # "jepa_config_path": self._encoder_config_path,
+            },
         )
 
     @override
-    def forward(self, x: MultimodalMartianLandslideSample) -> torch.Tensor:
-        image: torch.Tensor = x.merge_channels()
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        image: torch.Tensor = x
         logits: torch.Tensor = self._model(image)
         return logits
