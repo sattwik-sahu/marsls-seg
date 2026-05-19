@@ -18,6 +18,8 @@ class BaseImageJEPA[
     TPredictor: BaseJEPAPredictor,
     TLoss: BaseJEPALoss,
 ](BaseJEPA[TInput, TEncoder, TEncoding, TLatent, TPredictor, TLoss]):
+    """Base class for JEPA with an image encoder."""
+
     pass
 
 
@@ -29,6 +31,8 @@ class BaseImagePatchJEPA[
     TPredictor: BaseJEPAPredictor,
     TLoss: BaseJEPALoss,
 ](BaseImageJEPA[TInput, TEncoder, TEncoding, TLatent, TPredictor, TLoss]):
+    """Base class for an image JEPA with an image encoder that encodes patches."""
+
     pass
 
 
