@@ -1,3 +1,2 @@
-# Strategy for IJEPA: Simple channel normalization using your class
 _target_: marsls_seg.utils.data.processing.MultimodalMarsLandslideDataProcessor
 params_file: ${data.params_file} # References a variable in the top-level config
