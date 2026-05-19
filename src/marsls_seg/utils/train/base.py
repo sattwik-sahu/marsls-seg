@@ -1,12 +1,13 @@
 from abc import ABC, abstractmethod
 
 import torch
-from tensordict import TensorClass, TensorDict
+from marsls_seg.utils.modules._typing import TensorData
 
 
 class BaseTrainer[
     TModel: torch.nn.Module,
-    TData: torch.Tensor | TensorClass | TensorDict,
+    TData: TensorData,
+    TLog: dict[str, float | int | str | list],
 ](ABC):
     """
     The base training pipeline.
@@ -20,7 +21,7 @@ class BaseTrainer[
         optimizer: torch.optim.Optimizer,
         device: torch.device,
         epoch: int,
-    ) -> None:
+    ) -> TLog:
         pass
 
     @abstractmethod

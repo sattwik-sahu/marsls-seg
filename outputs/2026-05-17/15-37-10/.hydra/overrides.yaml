@@ -1,7 +1,0 @@
-- model.encoder.dim=
-- model.predictor.decoder.dim=
-- model.encoder.n_heads=4
-- model.predictor.decoder.n_heads=4
-- model.encoder.n_groups=2
-- model.predictor.decoder.n_groups=2
-- model.encoder.n_layers=12

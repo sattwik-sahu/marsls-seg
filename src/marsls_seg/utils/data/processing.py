@@ -1,10 +1,12 @@
 from pathlib import Path
 from typing import Final
 
+import torch
 from tensordict import TensorDict
 from yaml import safe_load as load_yaml
 
 from marsls_seg.utils.data._typing import MultimodalMartianLandslideSample
+from marsls_seg.utils.data.mmls import MultimodalMartianLandslideDataset
 
 
 class MultimodalMarsLandslideDataProcessor:
@@ -37,3 +39,23 @@ class MultimodalMarsLandslideDataProcessor:
         normalized_features = (features - params["mean"]) / params["std"]  # type: ignore
         x.update_(normalized_features)  # type: ignore
         return x
+
+
+class ProcessedMMLSv2Dataset(
+    torch.utils.data.Dataset[MultimodalMartianLandslideSample]
+):
+    def __init__(
+        self,
+        dataset: MultimodalMartianLandslideDataset,
+        params_file: Path,
+    ) -> None:
+        super().__init__()
+
+        self._dataset = dataset
+        self._processor = MultimodalMarsLandslideDataProcessor(params_file=params_file)
+
+    def __len__(self) -> int:
+        return len(self._dataset)
+
+    def __getitem__(self, index) -> MultimodalMartianLandslideSample:
+        return self._processor(self._dataset[index])
