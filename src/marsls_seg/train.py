@@ -40,6 +40,7 @@ def main(cfg: DictConfig) -> None:
         name=f"run-{timestamp}",
         config=OmegaConf.to_container(cfg=cfg, resolve=True),  # type: ignore
         group=cfg.wandb.group,
+        mode=cfg.wandb.mode,
     )
 
     # Initialize datasets
@@ -119,7 +120,7 @@ def main(cfg: DictConfig) -> None:
 
     # Display model summary
     console.log("=========== Model summary ===========")
-    summary(model=model, depth=4)
+    summary(model=model)
 
     # Create progress bar
     with Progress(
