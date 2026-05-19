@@ -31,13 +31,12 @@ class IJEPATrainer(BaseTrainer[IJEPA, MultimodalMartianLandslideSample, dict]):
     def __init__(
         self, mask_ratio: tuple[float, float], n_epochs: int, wandb: Run
     ) -> None:
-        super().__init__()
+        super().__init__(wandb=wandb)
 
         # self._mask_ratio: float = mask_ratio[0]
         self._mask_ratio_scheduler: MaskingRatioScheduler = MaskingRatioScheduler(
             start=mask_ratio[0], end=mask_ratio[1], T=n_epochs
         )
-        self._wandb = wandb
 
     def _create_x_y_z(
         self,
