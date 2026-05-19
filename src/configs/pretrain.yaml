@@ -13,7 +13,6 @@ training:
   lr: 1e-4
   num_workers: 4
   n_epochs: 500
-  n_warmup_epochs: 20
   pin_memory: true
   # Evaluate model every ? epochs
   eval_int: 1

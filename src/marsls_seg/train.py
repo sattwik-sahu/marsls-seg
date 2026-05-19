@@ -85,22 +85,15 @@ def main(cfg: DictConfig) -> None:
     model: torch.nn.Module = hydra.utils.instantiate(cfg.model)
     model = model.to(device=DEVICE)
 
-    # Create optimizer
-    optimizer: torch.optim.Optimizer = torch.optim.AdamW(
-        model.parameters(), lr=cfg.training.lr
-    )
-
-    # Create learning rate scheduler
-    lr_scheduler: torch.optim.lr_scheduler.LRScheduler = (
-        get_cosine_schedule_with_warmup(
-            optimizer=optimizer,
-            num_warmup_steps=cfg.training.n_warmup_epochs,
-            num_training_steps=cfg.training.n_epochs,
-        )
-    )
-
     # Create trainer
-    trainer: BaseTrainer = hydra.utils.instantiate(cfg.trainer, wandb=wandb_run)
+    trainer: BaseTrainer = hydra.utils.instantiate(
+        cfg.trainer,
+        wandb=wandb_run,
+        model=model,
+        n_epochs=cfg.training.n_epochs,
+        lr=cfg.training.lr,
+        device=DEVICE,
+    )
 
     # Setup checkpoint directory
     ckpt_root_dir: Path = Path(cfg.training.ckpt_dir)
@@ -137,26 +130,12 @@ def main(cfg: DictConfig) -> None:
 
         # Start training by epochs
         for epoch in range(1, cfg.training.n_epochs + 1):
-            log = trainer.train_epoch(
-                model=model,
-                dataloader=train_loader,
-                optimizer=optimizer,
-                device=DEVICE,
-                epoch=epoch,
-            )
-
-            # Step the LR Scheduler
-            lr_scheduler.step()
-
-            # Log the learning rate
-            current_lr: float = lr_scheduler.get_last_lr()[0]  # type: ignore
-            wandb_run.log({"train/lr": current_lr})
-
-            progress.log({**log, "lr": current_lr})
+            log = trainer.train_epoch(dataloader=train_loader, epoch=epoch)
+            progress.log(log)
 
             # Evaluate model every `eval_int` epochs
             if epoch % cfg.training.eval_int == 0:
-                trainer.evaluate(model=model, dataloader=val_loader, device=DEVICE)
+                trainer.evaluate(dataloader=val_loader)
 
             # Update progress bar by one step
             progress.update(task_id=training_task, advance=1)
