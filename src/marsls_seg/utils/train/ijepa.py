@@ -111,14 +111,14 @@ class IJEPATrainer(BaseTrainer[IJEPA, MultimodalMartianLandslideSample, dict]):
         for batch in dataloader:
             ids_keep, ids_drop = generate_uniform_mask(
                 mask_ratio=self._mask_ratio_scheduler.value,
-                n_patches=model.context_encoder.encoder.n_patches,
+                n_patches=model.context_encoder.n_patches,
             )
             x, y, z = self._create_x_y_z(
                 batch=batch,
                 ids_keep=ids_keep,
                 ids_drop=ids_drop,
                 device=device,
-                pos_emb=model.context_encoder.encoder.pos_emb,
+                pos_emb=model.context_encoder.pos_emb,
             )
 
             optimizer.zero_grad()
@@ -169,7 +169,7 @@ class IJEPATrainer(BaseTrainer[IJEPA, MultimodalMartianLandslideSample, dict]):
             ids_keep=ids_keep,
             ids_drop=ids_drop,
             device=device,
-            pos_emb=model.context_encoder.encoder.pos_emb,
+            pos_emb=model.context_encoder.pos_emb,
         )
 
         with torch.no_grad():

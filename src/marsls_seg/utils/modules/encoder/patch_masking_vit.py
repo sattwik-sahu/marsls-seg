@@ -3,7 +3,8 @@ from einops import rearrange, repeat
 
 from marsls_seg.utils.modules.tf.encoder import TransformerEncoder
 from tensordict import TensorClass
-from marsls_seg.utils.modules.encoder.base import BaseImageEncoder
+from marsls_seg.utils.modules.encoder.base import BaseImagePatchEncoder
+from typing import override
 
 
 class PatchMaskingViTInput(TensorClass):
@@ -14,7 +15,7 @@ class PatchMaskingViTInput(TensorClass):
     """The indexes of the patches left visible after masking."""
 
 
-class PatchMaskingVisionTransformer(BaseImageEncoder):
+class PatchMaskingVisionTransformer(BaseImagePatchEncoder[PatchMaskingViTInput]):
     """Vision Transformer (ViT) implementation with patch masking."""
 
     def __init__(
@@ -27,15 +28,12 @@ class PatchMaskingVisionTransformer(BaseImageEncoder):
         n_channels: int,
         n_groups: int | None = None,
     ) -> None:
-        super().__init__()
+        super().__init__(
+            dim=dim, n_channels=n_channels, img_size=img_size, patch_size=patch_size
+        )
 
-        self._dim: int = dim
         self._n_heads: int = n_heads
         self._n_layers: int = n_layers
-        self._patch_size: int = patch_size
-        self._img_size: int = img_size
-        self._n_channels: int = n_channels
-        self._n_patches: int = int((self._img_size // self._patch_size) ** 2)
 
         self._patchify = torch.nn.Conv2d(
             in_channels=self._n_channels,
@@ -61,6 +59,7 @@ class PatchMaskingVisionTransformer(BaseImageEncoder):
     def n_patches(self) -> int:
         return self._n_patches
 
+    @override
     def forward(self, x: PatchMaskingViTInput | torch.Tensor) -> torch.Tensor:
         if not isinstance(x, torch.Tensor):
             image = x.image

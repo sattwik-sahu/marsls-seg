@@ -1,9 +1,8 @@
 import torch
-from marsls_seg.utils.modules.jepa.base import BaseJEPA
+from marsls_seg.utils.modules.jepa.extras import BaseImagePatchJEPA
 from marsls_seg.utils.modules.sigreg import SIGReg
 from typing import override
 
-from marsls_seg.utils.modules.ijepa.encoder import IJEPAEncoder
 from marsls_seg.utils.modules.ijepa._typing import (
     IJEPAInput,
     IJEPAEncoding,
@@ -11,11 +10,17 @@ from marsls_seg.utils.modules.ijepa._typing import (
     IJEPALoss,
     IJEPAOutput,
 )
-from marsls_seg.utils.modules.ijepa.predictor import IJEPAPredictor
+from marsls_seg.utils.modules.encoder.patch_masking_vit import (
+    PatchMaskingVisionTransformer as IJEPAEncoder,
+)
+
+from marsls_seg.utils.modules.jepa.extras import (
+    SimpleTransformerDecoderPredictor as IJEPAPredictor,
+)
 
 
 class IJEPA(
-    BaseJEPA[
+    BaseImagePatchJEPA[
         IJEPAInput, IJEPAEncoder, IJEPAEncoding, IJEPALatent, IJEPAPredictor, IJEPALoss
     ]
 ):
