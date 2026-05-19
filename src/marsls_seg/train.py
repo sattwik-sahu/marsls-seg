@@ -175,7 +175,8 @@ def main(cfg: DictConfig) -> None:
         model_artifact = wandb.Artifact(
             name=cfg.wandb.artifact_name, type="model", description=cfg.wandb.model_desc
         )
-        model_artifact.add_file(final_ckpt_path.as_posix())
+        model_artifact.add_file(final_ckpt_path.as_posix())  # Save the model weights
+        model_artifact.add_file(config_path.as_posix())  # Save the model config
         wandb_run.log_artifact(model_artifact)
         console.log(":tada: Uploaded artifact successfully!")
     else:
