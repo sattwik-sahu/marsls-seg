@@ -22,9 +22,6 @@ class BaseJEPALoss(TensorClass):
     """The total loss to be backpropagated."""
 
 
-<<<<<<< HEAD
-class JEPAOutput[TEncoding, TLoss: BaseJEPALoss](TensorClass):
-=======
 class BaseJEPAEncoder[TInput: TensorData, TEncoding: TensorData](torch.nn.Module, ABC):
     """Base class for a JEPA encoder."""
 
@@ -73,7 +70,6 @@ class BaseJEPAPredictor[TEncoding: TensorData, TLatent: TensorData](
 class JEPAOutput[TEncoding, TLoss: BaseJEPALoss](TensorClass):
     """The output of a JEPA model."""
 
->>>>>>> main
     context_encoding: TEncoding
     """Encoding of the context (perturbed input)."""
 
