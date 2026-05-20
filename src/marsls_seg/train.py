@@ -52,7 +52,9 @@ def main(cfg: DictConfig) -> None:
         params_file=data_params_file,
     )
     val_data: ProcessedMMLSv2Dataset = ProcessedMMLSv2Dataset(
-        dataset=MultimodalMartianLandslideDataset(data_root=data_root_dir, split="val"),
+        dataset=MultimodalMartianLandslideDataset(
+            data_root=data_root_dir, split=cfg.data.eval_split
+        ),
         params_file=data_params_file,
     )
 

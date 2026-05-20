@@ -1,22 +1,18 @@
 from typing import override
 
+import segmentation_models_pytorch as smp
 import torch
 import torch.nn.functional as F
 import torch.optim as optim
-
-from wandb import Run as WandbRun
-import segmentation_models_pytorch as smp
-
+from torchvision.transforms import InterpolationMode, v2
+from transformers import get_cosine_schedule_with_warmup
 
 from marsls_seg.utils.data._typing import MultimodalMartianLandslideSample
-
-from marsls_seg.utils.train.base import BaseTrainer
 from marsls_seg.utils.modules.segmentation.model import (
     SegmentationModelWithPretainedEncoder,
 )
-
-from transformers import get_cosine_schedule_with_warmup
-from torchvision.transforms import v2
+from marsls_seg.utils.train.base import BaseTrainer
+from wandb import Run as WandbRun
 
 
 def compute_metrics(preds: torch.Tensor, labels: torch.Tensor) -> tuple:
@@ -61,6 +57,7 @@ class SegmentationTrainer(
         n_epochs: int,
         n_warmup_epochs: int,
         lr: float,
+        apply_aug: bool,
         device: torch.device,
         wandb: WandbRun,
     ) -> None:
@@ -68,8 +65,12 @@ class SegmentationTrainer(
             model=model, n_epochs=n_epochs, lr=lr, device=device, wandb=wandb
         )
 
+        self._apply_aug: bool = apply_aug
+
         self._diceloss = smp.losses.DiceLoss(mode="binary")
         self._bceloss = torch.nn.BCEWithLogitsLoss(reduction="none")
+
+        self._max_miou: float = 0.0
 
         # Create LR scheduler
         self._lr_scheduler: torch.optim.lr_scheduler.LRScheduler = (
@@ -88,9 +89,11 @@ class SegmentationTrainer(
             [
                 v2.RandomHorizontalFlip(p=0.5),
                 v2.RandomVerticalFlip(p=0.5),
-                v2.RandomRotation(degrees=(-90, 90)),
-                v2.GaussianNoise(sigma=0.1),
-                v2.RandomResizedCrop(size=(128, 128), scale=(0.25, 100)),
+                # Use 'Nearest' for everything to ensure labels never get corrupted
+                v2.RandomRotation(
+                    degrees=(90, 90), interpolation=InterpolationMode.NEAREST
+                ),
+                v2.Identity(),  # Does nothing, used for debugging
             ]
         )
 
@@ -126,7 +129,9 @@ class SegmentationTrainer(
             image_size = batch.label.shape[-2:]
             image: torch.Tensor = batch.merge_channels()
             label: torch.Tensor = batch.label.unsqueeze(1)
-            image, label = self._apply_augmentation(image=image, label=label)
+
+            if self._apply_aug:
+                image, label = self._apply_augmentation(image=image, label=label)
 
             self._optimizer.zero_grad()
 
@@ -230,6 +235,9 @@ class SegmentationTrainer(
             for i in range(len(all_metrics[0]))
         )
 
+        miou: float = float(avg_metrics[5])
+        self._max_miou = max(miou, self._max_miou)
+
         log = {
             "epoch_loss": float(val_loss / len(dataloader)),
             "precision": float(avg_metrics[0]),
@@ -237,7 +245,8 @@ class SegmentationTrainer(
             "f1_score": float(avg_metrics[2]),
             "iou_bg": float(avg_metrics[3]),
             "iou_fg": float(avg_metrics[4]),
-            "miou": float(avg_metrics[5]),
+            "miou": miou,
+            "miou_max": self._max_miou,
         }
 
         self._wandb.log(log)

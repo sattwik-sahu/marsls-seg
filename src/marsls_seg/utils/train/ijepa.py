@@ -203,6 +203,7 @@ class IJEPATrainer(BaseTrainer[IJEPA, MultimodalMartianLandslideSample, dict]):
         losses: list[IJEPALoss] = []
         cos_sims: list[float] = []
         latent_stds: list[float] = []
+        latent_pred_stds: list[float] = []
         target_encodings: list[torch.Tensor] = []
 
         # batch: MultimodalMartianLandslideSample = next(iter(dataloader))
@@ -246,6 +247,12 @@ class IJEPATrainer(BaseTrainer[IJEPA, MultimodalMartianLandslideSample, dict]):
                 latent_std = flat_target.std(dim=0).mean().item()
                 latent_stds.append(latent_std)
 
+                flat_pred = jepa_output.prediction.reshape(
+                    -1, jepa_output.prediction.shape[-1]
+                )
+                latent_pred_std = flat_pred.std(dim=0).mean().item()
+                latent_pred_stds.append(latent_pred_std)
+
         # Build the interactive validation chart
         svd_plotly_fig = self._generate_svd_chart(torch.cat(target_encodings, dim=0))
 
@@ -259,6 +266,8 @@ class IJEPATrainer(BaseTrainer[IJEPA, MultimodalMartianLandslideSample, dict]):
             "val/diagnostics/prediction_cosine_similarity": sum(cos_sims)
             / len(cos_sims),
             "val/diagnostics/latent_dimension_std": sum(latent_stds) / len(latent_stds),
+            "val/diagnostics/latent_pred_std": sum(latent_pred_stds)
+            / len(latent_pred_stds),
         }
 
         # Inject interactive figure if matrix conversion succeeded

@@ -1,2 +1,3 @@
 _target_: marsls_seg.utils.train.segmentation.SegmentationTrainer
 n_warmup_epochs: 10
+apply_aug: false
