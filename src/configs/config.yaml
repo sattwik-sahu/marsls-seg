@@ -30,3 +30,4 @@ wandb:
   artifact_name: "marsls-ijepa"
   model_desc: ""
   group: ???
+  run_name: ""

@@ -48,6 +48,10 @@ class SMPWrapper(nn.Module, EncoderMixin):
 
         self._skip_dropout = nn.Dropout2d(p=0.1)
 
+    @property
+    def dim_embed(self) -> int:
+        return self._dim_embed
+
     def make_dilated(self, output_stride) -> None:
         self.is_dilated = True
 

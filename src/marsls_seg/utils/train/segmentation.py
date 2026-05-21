@@ -65,6 +65,9 @@ class SegmentationTrainer(
             model=model, n_epochs=n_epochs, lr=lr, device=device, wandb=wandb
         )
 
+        # Save the encoder dim of the model
+        self._wandb.config.update(dict(encoder_dim=self._model.encoder_dim))
+
         self._apply_aug: bool = apply_aug
 
         self._diceloss = smp.losses.DiceLoss(mode="binary")

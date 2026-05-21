@@ -5,7 +5,6 @@ import segmentation_models_pytorch as smp
 import torch
 
 from marsls_seg.utils.modules.segmentation.wrapper import SMPWrapper
-from marsls_seg.utils.data.mmls import MultimodalMartianLandslideSample
 
 
 class SegmentationModelWithPretainedEncoder(torch.nn.Module):
@@ -45,6 +44,10 @@ class SegmentationModelWithPretainedEncoder(torch.nn.Module):
             in_channels=3,
             classes=1,
         )
+
+    @property
+    def encoder_dim(self) -> int:
+        return self._encoder.dim_embed
 
     def _register_encoder(self) -> None:
         smp.encoders.encoders[self._CUSTOM_ENCODER_KEY] = dict(

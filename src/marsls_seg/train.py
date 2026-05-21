@@ -1,3 +1,13 @@
+import multiprocessing
+import sys
+
+# Python 3.13+ compatibility fix
+if sys.platform != "win32":
+    try:
+        multiprocessing.set_start_method("fork", force=True)
+    except RuntimeError:
+        pass
+
 import re
 from pathlib import Path
 
@@ -34,12 +44,14 @@ def main(cfg: DictConfig) -> None:
     console: Console = Console()
 
     # Initialize wandb
+    run_name: str = cfg.wandb.run_name or f"run-{timestamp}"
     wandb_run: wandb.Run = wandb.init(
         project=cfg.wandb.project,
-        name=f"run-{timestamp}",
+        name=run_name,
         config=OmegaConf.to_container(cfg=cfg, resolve=True),  # type: ignore
         group=cfg.wandb.group,
         mode=cfg.wandb.mode,
+        allow_val_change=True,
     )
 
     # Initialize datasets
