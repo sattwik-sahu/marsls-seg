@@ -3,20 +3,20 @@ sigreg_lambda: 0.02
 
 encoder:
   _target_: marsls_seg.utils.modules.ijepa.IJEPAEncoder
-  dim: 128
-  n_heads: 8
-  n_layers: 12
-  patch_size: 8
+  dim: 64
+  patch_size: 4
+  n_heads: 4
+  n_layers: 8
   img_size: 128
   n_channels: 7
-  n_groups: 4
+  n_groups: null
 
 predictor:
   _target_: marsls_seg.utils.modules.ijepa.IJEPAPredictor
-  dim: 128
-  n_heads: 8
+  dim: ${model.encoder.dim}
+  n_heads: ${model.encoder.n_heads}
   n_layers: 4
-  n_groups: 4
+  n_groups: ${model.encoder.n_groups}
 
 sigreg:
   _target_: marsls_seg.utils.modules.sigreg.SIGReg

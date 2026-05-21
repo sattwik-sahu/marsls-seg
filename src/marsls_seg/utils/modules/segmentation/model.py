@@ -1,9 +1,10 @@
-import segmentation_models_pytorch as smp
-import torch
-from marsls_seg.utils.modules.segmentation.wrapper import SMPWrapper
 from pathlib import Path
 from typing import override
-from marsls_seg.utils.data.mmls import MultimodalMartianLandslideSample
+
+import segmentation_models_pytorch as smp
+import torch
+
+from marsls_seg.utils.modules.segmentation.wrapper import SMPWrapper
 
 
 class SegmentationModelWithPretainedEncoder(torch.nn.Module):
@@ -12,19 +13,25 @@ class SegmentationModelWithPretainedEncoder(torch.nn.Module):
     _CUSTOM_ENCODER_KEY: str = "marsls_jepa_encoder"
 
     def __init__(
-        self, arch: str, encoder_ckpt_path: Path, encoder_config_path: Path
+        self, arch: str, encoder_ckpt_path: str, encoder_config_path: str
     ) -> None:
         super().__init__()
 
         # The architecture of the segmentation head
         self._seg_arch: str = arch
-        self._encoder_ckpt_path: Path = encoder_ckpt_path
-        self._encoder_config_path: Path = encoder_config_path
+        self._encoder_ckpt_path: Path = Path(encoder_ckpt_path)
+        self._encoder_config_path: Path = Path(encoder_config_path)
 
         # Load the wrapper on the encoder
         self._encoder: SMPWrapper = SMPWrapper(
-            jepa_ckpt_path=encoder_ckpt_path, jepa_config_path=encoder_config_path
+            jepa_ckpt_path=self._encoder_ckpt_path,
+            jepa_config_path=self._encoder_config_path,
         )
+
+        # Freeze encoder
+        self._encoder.eval()
+        for p in self._encoder.parameters():
+            p.requires_grad = False
 
         # Register the encoder
         self._register_encoder()
@@ -38,9 +45,13 @@ class SegmentationModelWithPretainedEncoder(torch.nn.Module):
             classes=1,
         )
 
+    @property
+    def encoder_dim(self) -> int:
+        return self._encoder.dim_embed
+
     def _register_encoder(self) -> None:
         smp.encoders.encoders[self._CUSTOM_ENCODER_KEY] = dict(
-            encoder=SMPWrapper,
+            encoder=lambda **kwargs: self._encoder,
             pretrained_settings={
                 "custom": {
                     "mean": [0],
@@ -51,14 +62,10 @@ class SegmentationModelWithPretainedEncoder(torch.nn.Module):
                     "input_range": [0, 1],
                 }
             },
-            params={
-                # "jepa_ckpt_path": self._encoder_ckpt_path,
-                # "jepa_config_path": self._encoder_config_path,
-            },
+            params={},
         )
 
     @override
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        image: torch.Tensor = x
-        logits: torch.Tensor = self._model(image)
+        logits: torch.Tensor = self._model(x)
         return logits

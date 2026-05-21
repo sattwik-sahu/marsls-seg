@@ -1,17 +1,20 @@
 defaults:
   - _self_
-  - model: ijepa
-  - trainer: ijepa
+  # - model: ijepa
+  # - trainer: ijepa
+  - model: segmentation
+  - trainer: segmentation
   - data/processor: norm
 
 data:
   root_dir: "/mnt/toshiba_hdd/code/robot-navigation/marsls-seg/data/marsls-seg/mmlsv2"
   params_file: "/mnt/toshiba_hdd/code/robot-navigation/marsls-seg/data/configs/mmls_norm.yaml"
+  eval_split: test
 
 training:
-  batch_size: 48
+  batch_size: 32
   lr: 1e-4
-  num_workers: 4
+  num_workers: 0
   n_epochs: 500
   pin_memory: true
   # Evaluate model every ? epochs
@@ -27,3 +30,4 @@ wandb:
   artifact_name: "marsls-ijepa"
   model_desc: ""
   group: ???
+  run_name: ""

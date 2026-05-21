@@ -18,7 +18,7 @@ class SMPWrapper(nn.Module, EncoderMixin):
     Wraps the IJEPA ContextEncoder to be universally compatible with segmentation_models_python
     """
 
-    def __init__(self, jepa_ckpt_path: Path, jepa_config_path: Path) -> None:
+    def __init__(self, jepa_ckpt_path: Path, jepa_config_path: Path, **kwargs) -> None:
         super().__init__()
 
         self._jepa_model: BaseImagePatchJEPA = load_model_from_ckpt(
@@ -48,6 +48,10 @@ class SMPWrapper(nn.Module, EncoderMixin):
 
         self._skip_dropout = nn.Dropout2d(p=0.1)
 
+    @property
+    def dim_embed(self) -> int:
+        return self._dim_embed
+
     def make_dilated(self, output_stride) -> None:
         self.is_dilated = True
 
@@ -56,7 +60,7 @@ class SMPWrapper(nn.Module, EncoderMixin):
         encodings: torch.Tensor = self._encoder(vit_input)
 
         # Define number of patches in height and width
-        hp = wp = int((self._encoder.n_patches)**0.5)
+        hp = wp = int((self._encoder.n_patches) ** 0.5)
 
         # Rearrange encodings to form feature maps
         feat: torch.Tensor = rearrange(
