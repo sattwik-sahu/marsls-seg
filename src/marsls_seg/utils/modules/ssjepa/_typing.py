@@ -5,6 +5,8 @@ from marsls_seg.utils.modules.encoder.spatio_spectral_vit import SSVitInput
 from marsls_seg.utils.modules.jepa.base import BaseJEPALoss, JEPAOutput
 
 SSJEPAInput = SSVitInput
+SSJEPAEncoding = torch.Tensor
+SSJEPALatent = torch.Tensor
 
 class SSJEPALoss(BaseJEPALoss):
     """
@@ -13,8 +15,7 @@ class SSJEPALoss(BaseJEPALoss):
 
     pred : torch.Tensor # Prediction loss for masked patches
     sigreg : torch.Tensor # SigReg loss to prevent the model from collapsing
-    total : torch.Tensor # total loss to be optimized 
-
+    
 
 type SSJEPAOutput = JEPAOutput[torch.Tensor , SSJEPALoss]
 

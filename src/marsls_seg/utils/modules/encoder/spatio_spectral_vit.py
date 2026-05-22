@@ -1,6 +1,5 @@
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
 
 from typing import override
 from einops import repeat, rearrange
@@ -42,7 +41,7 @@ class SpatioSpectralVisionTransformer(BaseImagePatchEncoder[SSVitInput]):
         self.spatial_embeddings = nn.Embeddings(self.n_patches,dim)
         self.channel_embeddings = nn.Embeddings(n_channels,dim)
 
-        self.encoder = TransformerEncoder(n_layers=n_layers,n_heads=n_heads,dim=dim)
+        self.encoder = TransformerEncoder(n_layers=n_layers, n_heads=n_heads, dim=dim,)
 
     @property
     def total_tokens(self) -> int:
@@ -54,8 +53,8 @@ class SpatioSpectralVisionTransformer(BaseImagePatchEncoder[SSVitInput]):
         creates the full positional embedding for all tokens
         by combining the spatial and channel embeddings
         """
-        s_idx = torch.arrange(self.n_patches,device=device)
-        c_idx = torch.arrange(self.n_channels,device=device)
+        s_idx = torch.arange(self.n_patches,device=device)
+        c_idx = torch.arange(self.n_channels,device=device)
 
         s_emb=self.spatial_embeddings(s_idx)
         c_emb=self.channel_embeddings(c_idx)
@@ -63,7 +62,7 @@ class SpatioSpectralVisionTransformer(BaseImagePatchEncoder[SSVitInput]):
         combined = c_emb.unsqueeze(1) + s_emb.unsqueeze(0)
 
         return combined.rearrange(combined, "c p d -> (c p) d")
-
+        
 
     @override
     def forward (self, x: SSVitInput | torch.Tensor) -> torch.Tensor :
@@ -77,7 +76,8 @@ class SpatioSpectralVisionTransformer(BaseImagePatchEncoder[SSVitInput]):
         channel_tokens = []
         for i in range(c):
             t=self.tokenizer[i](image[:,i:i+1])
-            channel_tokens.append(rearrange(t,"b,d,h,w -> b (h w) d"))
+            channel_tokens.append(rearrange(t,"b,d,h,w -> b (h w) d")) 
+            #TODO: check to parallelize
 
         tokens = torch.cat(channel_tokens,dim=1)
 

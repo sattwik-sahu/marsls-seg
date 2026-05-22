@@ -64,6 +64,7 @@ def generate_spatio_spectral_mask(
     ids_drop, _ = torch.sort(ids_drop)
 
     return ids_keep, ids_drop
+#TODO: Remove this
 
 
 
