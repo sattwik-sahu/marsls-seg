@@ -35,73 +35,80 @@ class SpatioSpectralJepa(
         #variable for storing the vissible mask from the last forward pass
         self._last_visible_mask : torch.Tensor = torch.empty(0)
 
-    def _get_masked_patch_indexes(self,
-                                  visible_mask : torch.Tensor,
-                                  device : torch.device = DEVICE
-                                  ) -> torch.Tensor:
+    def _get_masked_token_indexes(self, visible_mask: torch.Tensor) -> torch.Tensor:
         """
-            Finds the indices that were hidden given the visible mask.
+        Finds the indices that were hidden (dropped) using set operations.
+        Returns a tensor of integers (indices).
+        """
+        # 1. Get the full range of tokens (1792)
+        # Using self.context_encoder.total_tokens ensures we cover all 7 channels
+        all_indexes: set = set(range(self.context_encoder.total_tokens))
 
-            Args:
-                visible_mask (torch.Tensor) : 1D tensor of indices that are currently visible
+        # 2. Convert the visible mask (ids_keep) to a Python set of integers
+        visible_indexes: set = set(visible_mask.flatten().tolist())
 
-            Returns :
-                torch.Tensor (torch.Tensor) : 1D tensor of indices that were masked
+        # 3. Find the difference (the indices that are NOT visible)
+        masked_indexes: set = all_indexes.difference(visible_indexes)
 
-
-        """ 
-        device = visible_mask.device
-        total_tokens = self.context_encoder.total_tokens
-
-        is_dropped = torch.ones(total_tokens , dtype=torch.bool , device=device)
-
-        is_dropped[visible_mask] = False
-
-        return torch.nonzero(is_dropped).squeeze(1)
-        #TODO: 
+     
+        return torch.as_tensor(sorted(list(masked_indexes)), device=visible_mask.device)
     
     @override
     def _calculate_loss(
-        self,
-        s_x : torch.Tensor,
-        s_y : torch.Tensor,
-        s_y_hat : torch.Tensor,
-        device : torch.device = DEVICE,
+        self, s_x: torch.Tensor, s_y: torch.Tensor, s_y_hat: torch.Tensor
     ) -> SSJEPALoss:
         """
-           Caculates the loss between the Target Encodings and Predictions
-           Args:
-                s_x (torch.Tensor) : The input spatio-spectral sequence
-                s_y (torch.Tensor) : The target encodings for the masked patches
-                s_y_hat (torch.Tensor) : The predicted encodings for the masked tokens
+        Calculate the loss for a single Spatio-Spectral JEPA step.
 
+        Args:
+            s_x (torch.Tensor): The context encoder output (visible tokens).
+            s_y (torch.Tensor): The target encoder output (all 1792 tokens).
+            s_y_hat (torch.Tensor): The predictor output (predictions for masked tokens).
+
+        Returns:
+            SSJEPALoss: TensorClass containing pred, sigreg, and total loss.
         """
+       
+        ids_drop = self._get_masked_token_indexes(self._last_context_mask)
 
-        device = s_y.device
+       
+        # s_y: [B, 1792, dim] -> target_masked: [B, num_masked, dim]
+        target_masked: torch.Tensor = s_y[:, ids_drop]
 
-        total_tokens = self.context_encoder.total_tokens
-        is_dropped = torch.ones(total_tokens,dtype=torch.bool,device=device)
+        
+        loss_pred = torch.nn.functional.mse_loss(s_y_hat, target_masked)
 
-        is_dropped[self._last_visible_mask] = False
-        ids_drop = torch.nonzero(is_dropped).squeeze(1)
-
-        target_masked = s_y[:,ids_drop] 
-        # transforming s_y's shape from B, Total_tokens,dim to B,M,dim
-
-        loss_pred = torch.nn.functional.mse_loss(s_y_hat,target_masked)
-
-        loss_sigreg_context = self._sigreg(s_x.transpose(0, 1))
-        loss_sigreg_target = self._sigreg(s_y.transpose(0, 1))
+       
+        loss_sigreg_context: torch.Tensor = self._sigreg(s_x.transpose(0, 1))
+        loss_sigreg_target: torch.Tensor = self._sigreg(s_y.transpose(0, 1))
         loss_sigreg = loss_sigreg_context + loss_sigreg_target
 
-        loss_total = (1 - self._sigreg_lambda) * loss_pred + self._sigreg_lambda * loss_sigreg
+       
+        loss_total = (
+            1 - self._sigreg_lambda
+        ) * loss_pred + self._sigreg_lambda * loss_sigreg
 
-        return SSJEPALoss(total=loss_total, pred=loss_pred, sigreg=loss_sigreg)
+       
+        return SSJEPALoss(
+            sigreg=loss_sigreg, 
+            pred=loss_pred, 
+            total=loss_total
+        )
     
-
     @override
-    def forward(self, x: torch.Tensor)
+    def forward(self, x: SSJEPAInput, y: SSJEPAInput, z: torch.Tensor) -> SSJEPAOutput:
+        """
+        Perform a forward pass through the Spatio-Spectral JEPA.
+        
+        Args:
+            x: Input for context encoder (image + mask of visible indices)
+            y: Input for target encoder (full image)
+            z: The query for predictor (positional embeddings of masked indices)
+        """
 
+        self._last_visible_mask = x.mask
+        
+        return super().forward(x=x, y=y, z=z)
 
 
 
