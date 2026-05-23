@@ -183,3 +183,6 @@ pyrightconfig.json
 # Hydra output folders
 /outputs/
 /multirun/
+
+# Ignore tests
+/tests/

@@ -7,12 +7,12 @@ defaults:
   - data/processor: norm
 
 data:
-  root_dir: "/mnt/toshiba_hdd/code/robot-navigation/marsls-seg/data/marsls-seg/mmlsv2"
-  params_file: "/mnt/toshiba_hdd/code/robot-navigation/marsls-seg/data/configs/mmls_norm.yaml"
+  root_dir: "data/mmlsv2"
+  params_file: "data/mmlsv2/norm.yaml"
   eval_split: test
 
 training:
-  batch_size: 32
+  batch_size: 8
   lr: 1e-4
   num_workers: 0
   n_epochs: 500
@@ -22,7 +22,7 @@ training:
   # Save model ckpt every ? epochs
   save_int: 60
   # Where to save the model?
-  ckpt_dir: /mnt/toshiba_hdd/code/robot-navigation/marsls-seg/data/runs/ms-jepa
+  ckpt_dir: data/ckpts
 
 wandb:
   project: MarsLS-JEPA
