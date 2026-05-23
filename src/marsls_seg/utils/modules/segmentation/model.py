@@ -1,10 +1,9 @@
-from pathlib import Path
 from typing import override
 
 import segmentation_models_pytorch as smp
 import torch
 
-from marsls_seg.utils.modules.segmentation.wrapper import SMPWrapper
+from marsls_seg.utils.modules.segmentation.base import Base_SMP_EncoderBackbone
 
 
 class SegmentationModelWithPretainedEncoder(torch.nn.Module):
@@ -12,26 +11,15 @@ class SegmentationModelWithPretainedEncoder(torch.nn.Module):
 
     _CUSTOM_ENCODER_KEY: str = "marsls_jepa_encoder"
 
-    def __init__(
-        self, arch: str, encoder_ckpt_path: str, encoder_config_path: str
-    ) -> None:
+    def __init__(self, arch: str, backbone: Base_SMP_EncoderBackbone) -> None:
         super().__init__()
 
         # The architecture of the segmentation head
         self._seg_arch: str = arch
-        self._encoder_ckpt_path: Path = Path(encoder_ckpt_path)
-        self._encoder_config_path: Path = Path(encoder_config_path)
+        self._backbone = backbone
 
-        # Load the wrapper on the encoder
-        self._encoder: SMPWrapper = SMPWrapper(
-            jepa_ckpt_path=self._encoder_ckpt_path,
-            jepa_config_path=self._encoder_config_path,
-        )
-
-        # Freeze encoder
-        self._encoder.eval()
-        for p in self._encoder.parameters():
-            p.requires_grad = False
+        # Freeze backbone encoder
+        self._backbone.freeze_encoder()
 
         # Register the encoder
         self._register_encoder()
@@ -47,11 +35,11 @@ class SegmentationModelWithPretainedEncoder(torch.nn.Module):
 
     @property
     def encoder_dim(self) -> int:
-        return self._encoder.dim_embed
+        return self._backbone.dim_embed
 
     def _register_encoder(self) -> None:
         smp.encoders.encoders[self._CUSTOM_ENCODER_KEY] = dict(
-            encoder=lambda **kwargs: self._encoder,
+            encoder=lambda **kwargs: self._backbone,
             pretrained_settings={
                 "custom": {
                     "mean": [0],

@@ -13,7 +13,7 @@ from marsls_seg.helpers.mask import (
     generate_uniform_mask,
 )
 from marsls_seg.utils.data._typing import MultimodalMartianLandslideSample
-from marsls_seg.utils.modules.encoder.spatio_spectral_vit import SSVitInput
+from marsls_seg.utils.modules.encoder.spatio_spectral_vit import SSViTInput
 from marsls_seg.utils.modules.ssjepa._typing import SSJEPAOutput
 from marsls_seg.utils.modules.ssjepa.jepa import SpatioSpectralJEPA, SSJEPALoss
 from marsls_seg.utils.train.base import BaseTrainer
@@ -66,17 +66,17 @@ class SSJEPATrainer(
         ids_keep: torch.Tensor,
         ids_drop: torch.Tensor,
         device: torch.device,
-    ) -> tuple[SSVitInput, SSVitInput, torch.Tensor]:
+    ) -> tuple[SSViTInput, SSViTInput, torch.Tensor]:
         """Creates the context(x), target(y) and Query (z) tensors"""
         image = batch.merge_channels()  # (B, 7, 128, 128)
         if self._model.training:
             image = self._augmentation(image)
 
         # Input Image + indices of set of visible patches
-        x = SSVitInput(image=image, mask=ids_keep).to(device=device)
+        x = SSViTInput(image=image, mask=ids_keep).to(device=device)
 
         # Full image for the target encoder
-        y = SSVitInput(image=image).to(device=device)
+        y = SSViTInput(image=image).to(device=device)
 
         # This is our query
         z_full = self._model.context_encoder.get_full_pos_embed

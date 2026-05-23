@@ -1,10 +1,9 @@
 import torch
-from tensordict import TensorClass
 
-from marsls_seg.utils.modules.encoder.spatio_spectral_vit import SSVitInput
+from marsls_seg.utils.modules.encoder.spatio_spectral_vit import SSViTInput
 from marsls_seg.utils.modules.jepa.base import BaseJEPALoss, JEPAOutput
 
-SSJEPAInput = SSVitInput
+SSJEPAInput = SSViTInput
 SSJEPAEncoding = torch.Tensor
 SSJEPALatent = torch.Tensor
 

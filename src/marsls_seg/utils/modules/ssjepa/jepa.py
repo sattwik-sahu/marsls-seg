@@ -4,7 +4,7 @@ import torch
 
 from marsls_seg.helpers.device import DEVICE
 from marsls_seg.utils.modules.encoder.spatio_spectral_vit import (
-    SpatioSpectralVisionTransformer,
+    SpatioSpectralVisionTransformer as SSJEPAEncoder,
 )
 from marsls_seg.utils.modules.jepa.extras import (
     BaseImagePatchJEPA,
@@ -20,7 +20,7 @@ DEVICE = DEVICE
 class SpatioSpectralJEPA(
     BaseImagePatchJEPA[
         SSJEPAInput,
-        SpatioSpectralVisionTransformer,
+        SSJEPAEncoder,
         SSJEPAEncoding,
         SSJEPALatent,
         SimpleTransformerDecoderPredictor,
@@ -35,7 +35,7 @@ class SpatioSpectralJEPA(
 
     def __init__(
         self,
-        encoder: SpatioSpectralVisionTransformer,
+        encoder: SSJEPAEncoder,
         predictor: SimpleTransformerDecoderPredictor,
         sigreg: SIGReg,
         sigreg_lambda: float,

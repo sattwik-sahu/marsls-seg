@@ -1,0 +1,6 @@
+_target_: marsls_seg.utils.modules.segmentation.wrappers.IJEPA_SMP_Backbone
+
+# TODO Fill in paths
+encoder_ckpt_path: ...
+encoder_config_path: ...
+fusion_mlp_hidden_size: 2048
