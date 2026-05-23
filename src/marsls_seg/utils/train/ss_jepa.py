@@ -15,13 +15,13 @@ from marsls_seg.helpers.mask import (
 from marsls_seg.utils.data._typing import MultimodalMartianLandslideSample
 from marsls_seg.utils.modules.encoder.spatio_spectral_vit import SSVitInput
 from marsls_seg.utils.modules.ssjepa._typing import SSJEPAOutput
-from marsls_seg.utils.modules.ssjepa.jepa import SpatioSpectralJepa, SSJEPALoss
+from marsls_seg.utils.modules.ssjepa.jepa import SpatioSpectralJEPA, SSJEPALoss
 from marsls_seg.utils.train.base import BaseTrainer
 from wandb import Run as WandbRun
 
 
-class SSJEPAtrainer(
-    BaseTrainer[SpatioSpectralJepa, MultimodalMartianLandslideSample, dict]
+class SSJEPATrainer(
+    BaseTrainer[SpatioSpectralJEPA, MultimodalMartianLandslideSample, dict]
 ):
     """
     Trainer for spatio-spectral jepa, handles the Training of 7 channels.
@@ -29,7 +29,7 @@ class SSJEPAtrainer(
 
     def __init__(
         self,
-        model: SpatioSpectralJepa,
+        model: SpatioSpectralJEPA,
         mask_ratio: tuple[float, float],
         lr: float,
         n_epochs: int,
@@ -88,7 +88,7 @@ class SSJEPAtrainer(
         return x, y, z
 
     @override
-    def _create_optimizer(self, model: SpatioSpectralJepa) -> torch.optim.Optimizer:
+    def _create_optimizer(self, model: SpatioSpectralJEPA) -> torch.optim.Optimizer:
         return torch.optim.AdamW(params=model.parameters(), lr=self._lr)
 
     @override

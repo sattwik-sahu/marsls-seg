@@ -17,7 +17,7 @@ from ._typing import SSJEPAEncoding, SSJEPAInput, SSJEPALatent, SSJEPALoss, SSJE
 DEVICE = DEVICE
 
 
-class SpatioSpectralJepa(
+class SpatioSpectralJEPA(
     BaseImagePatchJEPA[
         SSJEPAInput,
         SpatioSpectralVisionTransformer,
@@ -38,11 +38,11 @@ class SpatioSpectralJepa(
         encoder: SpatioSpectralVisionTransformer,
         predictor: SimpleTransformerDecoderPredictor,
         sigreg: SIGReg,
-        sigred_lambda: float,
+        sigreg_lambda: float,
     ) -> None:
         super().__init__(context_encoder=encoder, predictor=predictor)
         self._sigreg = sigreg
-        self._sigreg_lambda: float = sigred_lambda
+        self._sigreg_lambda: float = sigreg_lambda
 
         # variable for storing the vissible mask from the last forward pass
         self._last_visible_mask: torch.Tensor = torch.empty(0)

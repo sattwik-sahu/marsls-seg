@@ -10,9 +10,8 @@ from marsls_seg.utils.modules.tf.encoder import TransformerEncoder
 
 class SSVitInput(TensorClass):
     image: torch.Tensor  # (B, 7, 128, 128)
-    mask: (
-        torch.Tensor
-    )  # (M) Indices of Visible tokens in the range of (0,num_patches*7)
+    mask: torch.Tensor = torch.empty(0)
+    """(M) Indices of Visible tokens in the range of (0,num_patches*7)"""
 
 
 class SpatioSpectralVisionTransformer(BaseImagePatchEncoder[SSVitInput]):
@@ -82,7 +81,10 @@ class SpatioSpectralVisionTransformer(BaseImagePatchEncoder[SSVitInput]):
         b, c, _, _ = image.shape
 
         tokens: torch.Tensor = rearrange(
-            self._tokenizer(image), "b np (nc d) -> b (nc np) d"
+            self._tokenizer(image),
+            "b (nc d) h w -> b (nc h w) d",
+            nc=self._n_channels,
+            d=self._dim,
         )
 
         """
