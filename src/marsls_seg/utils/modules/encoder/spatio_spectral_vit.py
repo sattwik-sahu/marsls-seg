@@ -1,98 +1,98 @@
-import torch
-import torch.nn as nn
-
 from typing import override
-from einops import repeat, rearrange
+
+import torch
+from einops import rearrange
 from tensordict import TensorClass
 
-from marsls_seg.utils.modules.tf.encoder import TransformerEncoder
 from marsls_seg.utils.modules.encoder.base import BaseImagePatchEncoder
+from marsls_seg.utils.modules.tf.encoder import TransformerEncoder
 
 
 class SSVitInput(TensorClass):
-    image: torch.Tensor # (B,7,128,128)
-    mask:  torch.Tensor # (M) Indices of Visible tokens in the range of (0,num_patches*7)
+    image: torch.Tensor  # (B, 7, 128, 128)
+    mask: (
+        torch.Tensor
+    )  # (M) Indices of Visible tokens in the range of (0,num_patches*7)
 
 
 class SpatioSpectralVisionTransformer(BaseImagePatchEncoder[SSVitInput]):
     """
-        Vision transformer that tokenizes channels seperately and 
-        uses the seperate spatial and channel encodings
+    Vision transformer that tokenizes channels seperately and
+    uses the seperate spatial and channel encodings.
     """
+
     def __init__(
-            self,
-            dim : int,
-            n_heads : int,
-            n_layers : int,
-            patch_size : int,
-            img_size : int,
-            n_channels : int,
-            n_groups : int | None = None,
-            
-    )->None:
-        super().__init__(dim=dim,n_channels=n_channels,img_size=img_size,patch_size=patch_size)
+        self,
+        dim: int,
+        n_heads: int,
+        n_layers: int,
+        patch_size: int,
+        img_size: int,
+        n_channels: int,
+        n_groups: int | None = None,
+    ) -> None:
+        super().__init__(
+            dim=dim, n_channels=n_channels, img_size=img_size, patch_size=patch_size
+        )
 
-        self.tokenizer = nn.ModuleList[(
-            nn.Conv2d(in_channels=1,out_channels=dim,kernel_size=patch_size,stride=patch_size)
-            for _ in range(n_channels)
-            )]
+        self._tokenizer: torch.nn.Conv2d = torch.nn.Conv2d(
+            in_channels=self._n_channels,
+            out_channels=self._dim * self._n_channels,
+            kernel_size=self._patch_size,
+            stride=self._patch_size,
+            groups=self._n_channels,
+        )
 
-        # learned positional encodings
-        self.spatial_embeddings = nn.Embeddings(self.n_patches,dim)
-        self.channel_embeddings = nn.Embeddings(n_channels,dim)
+        self._spatial_embeddings: torch.nn.Parameter = torch.nn.Parameter(
+            torch.randn(self._n_patches, self._dim) * 0.02
+        )
+        self._spectral_embeddings: torch.nn.Parameter = torch.nn.Parameter(
+            torch.randn(self._n_channels, self._dim) * 0.02
+        )
 
-        self.encoder = TransformerEncoder(n_layers=n_layers, n_heads=n_heads, dim=dim,)
+        self.encoder = TransformerEncoder(
+            n_layers=n_layers, n_heads=n_heads, dim=dim, n_groups=n_groups
+        )
 
     @property
     def total_tokens(self) -> int:
         return self.n_patches * self.n_channels
-    
+
     @property
-    def get_full_pos_embed(self, device) -> torch.Tensor :
+    def get_full_pos_embed(self) -> torch.Tensor:
         """
-        creates the full positional embedding for all tokens
-        by combining the spatial and channel embeddings
+        Creates the full positional embedding for all tokens
+        by combining the spatial and channel embeddings.
         """
-        s_idx = torch.arange(self.n_patches,device=device)
-        c_idx = torch.arange(self.n_channels,device=device)
+        combined = self._spectral_embeddings.unsqueeze(
+            1
+        ) + self._spatial_embeddings.unsqueeze(0)
 
-        s_emb=self.spatial_embeddings(s_idx)
-        c_emb=self.channel_embeddings(c_idx)
+        flattened_tokens: torch.Tensor = rearrange(combined, "c p d -> (c p) d")
 
-        combined = c_emb.unsqueeze(1) + s_emb.unsqueeze(0)
-
-        return combined.rearrange(combined, "c p d -> (c p) d")
-        
+        return flattened_tokens
 
     @override
-    def forward (self, x: SSVitInput | torch.Tensor) -> torch.Tensor :
+    def forward(self, x: SSVitInput | torch.Tensor) -> torch.Tensor:
         if not isinstance(x, torch.Tensor):
             image = x.image
         else:
             image = x
 
-        b,c,h,w = image.shape
+        b, c, _, _ = image.shape
 
-        channel_tokens = []
-        for i in range(c):
-            t=self.tokenizer[i](image[:,i:i+1])
-            channel_tokens.append(rearrange(t,"b,d,h,w -> b (h w) d")) 
-            #TODO: check to parallelize
+        tokens: torch.Tensor = rearrange(
+            self._tokenizer(image), "b np (nc d) -> b (nc np) d"
+        )
 
-        tokens = torch.cat(channel_tokens,dim=1)
+        """
+        Adding the identity of the channel to the positional embedding
+        allows the model to learn seperate spatial and channel encodings.
+        """
+        pos_embed = self.get_full_pos_embed  # (B, total_tokens, dim)
+        tokens = tokens + pos_embed.unsqueeze(0)
 
-        pos_embed=self.get_full_pos_embed(image.device) # (B, total_tokens,dim)
-        tokens = tokens + repeat(pos_embed, "n d -> b n d" , b=b)
-        # adding the identity of the channel to the positional embedding allows the model to learn seperate spatial and channel encodings
-
-        if isinstance(x, SSVitInput) and x.mask.numel() >0:
-            tokens = tokens[: , x.mask]
+        if isinstance(x, SSVitInput) and x.mask.numel() > 0:
+            tokens = tokens[:, x.mask]
 
         return self.encoder(tokens)
-                
-            
-
-        
-
-
-

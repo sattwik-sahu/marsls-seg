@@ -8,15 +8,17 @@ SSJEPAInput = SSVitInput
 SSJEPAEncoding = torch.Tensor
 SSJEPALatent = torch.Tensor
 
+
 class SSJEPALoss(BaseJEPALoss):
     """
-        class defines the loss components for spatio_spectral jepa
+    Class defining the loss components for spatio_spectral JEPA.
     """
 
-    pred : torch.Tensor # Prediction loss for masked patches
-    sigreg : torch.Tensor # SigReg loss to prevent the model from collapsing
-    
+    pred: torch.Tensor
+    """Prediction loss for masked patches"""
 
-type SSJEPAOutput = JEPAOutput[torch.Tensor , SSJEPALoss]
+    sigreg: torch.Tensor
+    """SigReg loss to prevent the model from collapsing"""
 
 
+type SSJEPAOutput = JEPAOutput[torch.Tensor, SSJEPALoss]

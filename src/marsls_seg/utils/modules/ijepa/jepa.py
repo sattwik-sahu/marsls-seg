@@ -16,9 +16,7 @@ from marsls_seg.utils.modules.encoder.patch_masking_vit import (
 
 from marsls_seg.utils.modules.jepa.extras import (
     SimpleTransformerDecoderPredictor as IJEPAPredictor,
-
 )
-
 
 
 class IJEPA(
