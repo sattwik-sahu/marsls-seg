@@ -1,28 +1,31 @@
 from pathlib import Path
+from typing import override
+
 import torch
-from marsls_seg.utils.modules.segmentation.base import BaseMMLS_SMP_Wrapper
-from marsls_seg.utils.data.mmls import MultimodalMartianLandslideSample
-from marsls_seg.utils.modules.ijepa import IJEPAEncoder, IJEPAInput, IJEPAEncoding
+from einops import rearrange
+
+from marsls_seg.utils.modules._typing import FeatureMap, MultiSpectralImage
 from marsls_seg.utils.modules.encoder.spatio_spectral_vit import (
     SpatioSpectralVisionTransformer,
     SSViTInput,
 )
-from marsls_seg.utils.modules._typing import FeatureMap
-from typing import override
-from einops import rearrange
+from marsls_seg.utils.modules.ijepa import IJEPAEncoder, IJEPAEncoding, IJEPAInput
+from marsls_seg.utils.modules.segmentation.base import (
+    BaseMultiSpectralImage_SMP_Backbone,
+)
 
 
-class IJEPA_SMP_Wrapper(BaseMMLS_SMP_Wrapper[IJEPAEncoder, IJEPAInput, IJEPAEncoding]):
+class IJEPA_SMP_Backbone(
+    BaseMultiSpectralImage_SMP_Backbone[IJEPAEncoder, IJEPAInput, IJEPAEncoding]
+):
     def __init__(
         self, jepa_ckpt_path: str | Path, jepa_config_path: str | Path
     ) -> None:
         super().__init__(jepa_ckpt_path, jepa_config_path)
 
     @override
-    def _convert_to_encoder_input(
-        self, x: MultimodalMartianLandslideSample
-    ) -> IJEPAInput:
-        return IJEPAInput(image=x.merge_channels())
+    def _convert_to_encoder_input(self, x: MultiSpectralImage) -> IJEPAInput:
+        return IJEPAInput(image=x)
 
     @override
     def _convert_to_feature_map(self, encoding: IJEPAEncoding) -> FeatureMap:
@@ -30,8 +33,10 @@ class IJEPA_SMP_Wrapper(BaseMMLS_SMP_Wrapper[IJEPAEncoder, IJEPAInput, IJEPAEnco
         return rearrange(encoding, "b (hp wp) d -> b d hp wp", hp=hp, wp=wp)
 
 
-class SSJEPA_SMP_Wrapper(
-    BaseMMLS_SMP_Wrapper[SpatioSpectralVisionTransformer, SSViTInput, torch.Tensor]
+class SSJEPA_SMP_Backbone(
+    BaseMultiSpectralImage_SMP_Backbone[
+        SpatioSpectralVisionTransformer, SSViTInput, torch.Tensor
+    ]
 ):
     def __init__(
         self,
@@ -55,10 +60,8 @@ class SSJEPA_SMP_Wrapper(
         )
 
     @override
-    def _convert_to_encoder_input(
-        self, x: MultimodalMartianLandslideSample
-    ) -> SSViTInput:
-        return SSViTInput(image=x.merge_channels())
+    def _convert_to_encoder_input(self, x: MultiSpectralImage) -> SSViTInput:
+        return SSViTInput(image=x)
 
     @override
     def _convert_to_feature_map(self, encoding: torch.Tensor) -> FeatureMap:

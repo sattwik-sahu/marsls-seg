@@ -3,7 +3,7 @@ from typing import override
 import segmentation_models_pytorch as smp
 import torch
 
-from marsls_seg.utils.modules.segmentation.base import Base_SMP_EncoderWrapper
+from marsls_seg.utils.modules.segmentation.base import Base_SMP_EncoderBackbone
 
 
 class SegmentationModelWithPretainedEncoder(torch.nn.Module):
@@ -11,7 +11,7 @@ class SegmentationModelWithPretainedEncoder(torch.nn.Module):
 
     _CUSTOM_ENCODER_KEY: str = "marsls_jepa_encoder"
 
-    def __init__(self, arch: str, backbone: Base_SMP_EncoderWrapper) -> None:
+    def __init__(self, arch: str, backbone: Base_SMP_EncoderBackbone) -> None:
         super().__init__()
 
         # The architecture of the segmentation head

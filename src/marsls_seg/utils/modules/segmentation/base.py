@@ -6,13 +6,13 @@ import torch
 from segmentation_models_pytorch.encoders._base import EncoderMixin
 
 from marsls_seg.utils.data._typing import MultimodalMartianLandslideSample
-from marsls_seg.utils.modules._typing import FeatureMap, TensorData
+from marsls_seg.utils.modules._typing import FeatureMap, TensorData, MultiSpectralImage
 from marsls_seg.utils.modules.encoder.base import BaseImageEncoder
 from marsls_seg.utils.modules.jepa.extras import BaseImageJEPA
 from marsls_seg.utils.modules.load import load_model_from_ckpt
 
 
-class Base_SMP_EncoderWrapper[
+class Base_SMP_EncoderBackbone[
     TInput: TensorData,
     TEncoderInput: TensorData,
     TEncoder: BaseImageEncoder,
@@ -111,13 +111,21 @@ class Base_SMP_EncoderWrapper[
         return [f0, f1, f2, f3, f4, f5]
 
 
-class BaseMMLS_SMP_Wrapper[
+class BaseMMLS_SMP_Backbone[
     TEncoder: BaseImageEncoder,
     TEncoderInput: TensorData,
     TEncoding: TensorData,
 ](
-    Base_SMP_EncoderWrapper[
+    Base_SMP_EncoderBackbone[
         MultimodalMartianLandslideSample, TEncoderInput, TEncoder, TEncoding
     ]
 ):
+    pass
+
+
+class BaseMultiSpectralImage_SMP_Backbone[
+    TEncoder: BaseImageEncoder,
+    TEncoderInput: TensorData,
+    TEncoding: TensorData,
+](Base_SMP_EncoderBackbone[MultiSpectralImage, TEncoderInput, TEncoder, TEncoding]):
     pass

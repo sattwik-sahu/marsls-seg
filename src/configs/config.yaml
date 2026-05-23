@@ -7,8 +7,8 @@ defaults:
   - data/processor: norm
 
 data:
-  root_dir: "data/mmlsv2"
-  params_file: "data/mmlsv2/norm.yaml"
+  root_dir: "data/marsls-seg/mmlsv2"
+  params_file: "data/configs/mmls_norm.yaml"
   eval_split: test
 
 training:
