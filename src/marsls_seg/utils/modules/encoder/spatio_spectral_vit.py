@@ -8,13 +8,13 @@ from marsls_seg.utils.modules.encoder.base import BaseImagePatchEncoder
 from marsls_seg.utils.modules.tf.encoder import TransformerEncoder
 
 
-class SSVitInput(TensorClass):
+class SSViTInput(TensorClass):
     image: torch.Tensor  # (B, 7, 128, 128)
     mask: torch.Tensor = torch.empty(0)
     """(M) Indices of Visible tokens in the range of (0,num_patches*7)"""
 
 
-class SpatioSpectralVisionTransformer(BaseImagePatchEncoder[SSVitInput]):
+class SpatioSpectralVisionTransformer(BaseImagePatchEncoder[SSViTInput]):
     """
     Vision transformer that tokenizes channels seperately and
     uses the seperate spatial and channel encodings.
@@ -72,7 +72,7 @@ class SpatioSpectralVisionTransformer(BaseImagePatchEncoder[SSVitInput]):
         return flattened_tokens
 
     @override
-    def forward(self, x: SSVitInput | torch.Tensor) -> torch.Tensor:
+    def forward(self, x: SSViTInput | torch.Tensor) -> torch.Tensor:
         if not isinstance(x, torch.Tensor):
             image = x.image
         else:
@@ -94,7 +94,7 @@ class SpatioSpectralVisionTransformer(BaseImagePatchEncoder[SSVitInput]):
         pos_embed = self.get_full_pos_embed  # (B, total_tokens, dim)
         tokens = tokens + pos_embed.unsqueeze(0)
 
-        if isinstance(x, SSVitInput) and x.mask.numel() > 0:
+        if isinstance(x, SSViTInput) and x.mask.numel() > 0:
             tokens = tokens[:, x.mask]
 
         return self.encoder(tokens)
