@@ -60,7 +60,9 @@ class SSJEPATrainer(
                     v2.RandomHorizontalFlip(p=0.5),
                     v2.RandomVerticalFlip(p=0.5),
                     v2.RandomRotation(degrees=[-90, 90]),
-                    v2.RandomResizedCrop(size=(128, 128), antialias=True, scale=(0.25, )),
+                    v2.RandomResizedCrop(
+                        size=(128, 128), antialias=True, scale=(0.333, 1.00)
+                    ),
                 ]
             )
 
