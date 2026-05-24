@@ -32,7 +32,9 @@ from marsls_seg.utils.data.mmls import (
     MultimodalMartianLandslideSample,
     SplitName,
 )
-from marsls_seg.utils.data.processing import ProcessedMMLSv2Dataset
+from marsls_seg.utils.data.processing import (
+    ProcessedMMLSv2Dataset,
+)
 from marsls_seg.utils.train.base import BaseTrainer
 
 

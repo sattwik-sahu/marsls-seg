@@ -1,11 +1,13 @@
 from typing import override
 
+from matplotlib import pyplot as plt
 import segmentation_models_pytorch as smp
 import torch
 import torch.nn.functional as F
 import torch.optim as optim
 from torchvision.transforms import InterpolationMode, v2
 from transformers import get_cosine_schedule_with_warmup
+import wandb
 
 from marsls_seg.utils.data._typing import MultimodalMartianLandslideSample
 from marsls_seg.utils.modules.segmentation.model import (
@@ -90,11 +92,16 @@ class SegmentationTrainer(
     def _create_augmentation(self) -> v2.Compose:
         return v2.Compose(
             [
+                v2.RandomResizedCrop(
+                    size=(128, 128),
+                    scale=(0.333, 1.00),
+                    interpolation=InterpolationMode.NEAREST,
+                ),
                 v2.RandomHorizontalFlip(p=0.5),
                 v2.RandomVerticalFlip(p=0.5),
                 # Use 'Nearest' for everything to ensure labels never get corrupted
                 v2.RandomRotation(
-                    degrees=(90, 90), interpolation=InterpolationMode.NEAREST
+                    degrees=(-90, 90), interpolation=InterpolationMode.NEAREST
                 ),
                 v2.Identity(),  # Does nothing, used for debugging
             ]
@@ -193,6 +200,100 @@ class SegmentationTrainer(
         #     "epoch_bce_loss": float(epoch_bce_loss),
         # }
 
+    def _visualize_and_log(
+        self,
+        image: torch.Tensor,
+        label: torch.Tensor,
+        logits: torch.Tensor,
+        epoch: int,
+        num_samples: int = 5,
+    ) -> None:
+        """
+        Creates a high-res grid of multispectral inputs, GT, and Preds for WandB/Paper.
+        """
+        # Ensure we don't try to plot more than what's in the batch
+        num_samples = min(num_samples, image.shape[0])
+        indices = torch.randperm(image.shape[0])[:num_samples]
+
+        # Move to CPU and float32 for plotting
+        images = image[indices].detach().cpu().float().numpy()
+        labels = label[indices].detach().cpu().float().numpy()
+        preds = (torch.sigmoid(logits[indices]) > 0.5).detach().cpu().float().numpy()
+
+        cols = 7  # RGB, Gray, DEM, Slope, Thermal, GT, Prediction
+        rows = num_samples
+        fig, axes = plt.subplots(rows, cols, figsize=(cols * 4, rows * 4), dpi=100)
+
+        # Titles for the columns (Placeholders for your specific names)
+        titles = [
+            "RGB (Visible)",
+            "Panchromatic",
+            "DEM",
+            "Slope",
+            "Thermal",
+            "Ground Truth",
+            "Mars-JEPA Pred",
+        ]
+
+        for r in range(rows):
+            # Extract channels based on your provided slices
+            img_rgb = images[r, 0:3].transpose(1, 2, 0)
+            img_dem = images[r, 3:4].squeeze()
+            img_slope = images[r, 4:5].squeeze()
+            img_thermal = images[r, 5:6].squeeze()
+            img_gray = images[r, 6:7].squeeze()
+            gt = labels[r].squeeze()
+            pred = preds[r].squeeze()
+
+            imgs_to_plot = [
+                img_rgb,
+                img_gray,
+                img_dem,
+                img_slope,
+                img_thermal,
+                gt,
+                pred,
+            ]
+
+            for c in range(cols):
+                ax = axes[r, c]
+                curr_img = imgs_to_plot[c]
+
+                # Normalize 1-channel images for better visibility in paper
+                if c > 0:  # Gray, DEM, Slope, Thermal, GT, Pred
+                    if c < 5:  # Scientific channels: use 'viridis' or 'magma'
+                        cmap = "magma"
+                        # Min-Max scaling for visualization contrast
+                        curr_img = (curr_img - curr_img.min()) / (
+                            curr_img.max() - curr_img.min() + 1e-7
+                        )
+                    else:  # Binary masks
+                        cmap = "gray"
+                    ax.imshow(curr_img, cmap=cmap)
+                else:
+                    # RGB normalization
+                    curr_img = (curr_img - curr_img.min()) / (
+                        curr_img.max() - curr_img.min() + 1e-7
+                    )
+                    ax.imshow(curr_img)
+
+                if r == 0:
+                    ax.set_title(titles[c], fontsize=20, fontweight="bold")
+
+                ax.axis("off")
+
+        plt.tight_layout()
+
+        # Log to WandB
+        self._wandb.log(
+            {"visuals/segmentation": wandb.Image(fig), "train/epoch": epoch}
+        )
+
+        # Optional: Save locally for paper use
+        # plt.savefig(f"mars_jepa_eval_epoch_{epoch}.png", bbox_inches='tight', dpi=300)
+
+        plt.close(fig)
+
     @override
     def evaluate(
         self,
@@ -201,14 +302,14 @@ class SegmentationTrainer(
 
         self._model.eval()
         val_loss = 0.0
-
         all_metrics = []
 
-        with torch.no_grad():
-            batch: MultimodalMartianLandslideSample
-            for batch in dataloader:
-                batch = batch.to(self._device)
+        # Track one batch for visualization
+        viz_data = None
 
+        with torch.no_grad():
+            for i, batch in enumerate(dataloader):
+                batch = batch.to(self._device)
                 image: torch.Tensor = batch.merge_channels()
                 label: torch.Tensor = batch.label.unsqueeze(1).to(torch.float32)
 
@@ -216,7 +317,6 @@ class SegmentationTrainer(
                     device_type=self._device.type, dtype=torch.bfloat16
                 ):
                     logits = self._model(image)
-
                     if logits.shape[2:] != label.shape[2:]:
                         logits = F.interpolate(
                             logits,
@@ -230,9 +330,19 @@ class SegmentationTrainer(
                     loss = l_dice + l_bce
 
                 val_loss += loss.item()
-
                 metrics = compute_metrics(logits, label)
                 all_metrics.append(metrics)
+
+                # Store the first batch of the validation set for visualization
+                if i == 0:
+                    viz_data = (image, label, logits)
+
+        # Trigger Visualization
+        if viz_data is not None:
+            # We use a placeholder for epoch, you might want to pass it into evaluate()
+            current_epoch = self._lr_scheduler.last_epoch
+            self._visualize_and_log(*viz_data, epoch=current_epoch)
+
         avg_metrics = tuple(
             sum(m[i] for m in all_metrics) / len(all_metrics)
             for i in range(len(all_metrics[0]))

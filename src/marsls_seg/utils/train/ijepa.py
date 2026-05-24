@@ -9,15 +9,11 @@ from torchvision.transforms import v2
 from transformers import get_cosine_schedule_with_warmup
 
 from marsls_seg.helpers.mask import MaskingRatioScheduler, generate_uniform_mask
-from marsls_seg.utils.data.mmls import (
-    MultimodalMartianLandslideSample,
-)
+from marsls_seg.utils.data.mmls import MultimodalMartianLandslideSample
 from marsls_seg.utils.modules.encoder.patch_masking_vit import (
     PatchMaskingViTInput as ViTInput,
 )
 from marsls_seg.utils.modules.ijepa._typing import IJEPAOutput
-
-# from marsls_seg.utils.modules.ijepa.jepa import IJEPA, IJEPALoss
 from marsls_seg.utils.modules.ijepa.jepa import IJEPA, IJEPALoss
 from marsls_seg.utils.modules.jepa.base import JEPAOutput
 from marsls_seg.utils.train.base import BaseTrainer
@@ -67,7 +63,10 @@ class IJEPATrainer(BaseTrainer[IJEPA, MultimodalMartianLandslideSample, dict]):
                 v2.RandomHorizontalFlip(p=0.5),
                 v2.RandomVerticalFlip(p=0.5),
                 v2.RandomRotation(degrees=[-90, 90]),
-                v2.RandomResizedCrop(size=(128, 128), antialias=True),
+                v2.RandomResizedCrop(
+                    size=(128, 128), antialias=True, scale=(0.333, 1.00)
+                ),
+                v2.GaussianNoise(),
             ]
         )
 

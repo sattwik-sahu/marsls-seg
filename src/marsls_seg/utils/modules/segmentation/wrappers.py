@@ -67,7 +67,10 @@ class SSJEPA_SMP_Backbone(
     def _convert_to_feature_map(self, encoding: torch.Tensor) -> FeatureMap:
         # Concatenate channel features along last dimension
         concatenated_features: torch.Tensor = rearrange(
-            encoding, "b (nc np) d -> b np (nc d)"
+            encoding,
+            "b (nc np) d -> b np (nc d)",
+            nc=self._encoder.n_channels,
+            np=self._encoder.n_patches,
         )
 
         # Fuse features using fusion layer
