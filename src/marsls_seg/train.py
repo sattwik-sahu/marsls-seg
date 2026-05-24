@@ -78,10 +78,10 @@ def main(cfg: DictConfig) -> None:
     # Create dataloaders by concatenating the train and eval splits from config
     train_loader: torch.utils.data.DataLoader[MultimodalMartianLandslideSample] = (
         torch.utils.data.DataLoader(
-            dataset=_concat_data_splits(splits=cfg.training.train_splits),
+            dataset=_concat_data_splits(splits=cfg.data.train_splits),
             batch_size=cfg.training.batch_size,
             shuffle=True,
-            drop_last=True,
+            drop_last=False,
             num_workers=cfg.training.num_workers,
             pin_memory=cfg.training.pin_memory,
             collate_fn=torch.stack,
@@ -89,7 +89,7 @@ def main(cfg: DictConfig) -> None:
     )
     val_loader: torch.utils.data.DataLoader[MultimodalMartianLandslideSample] = (
         torch.utils.data.DataLoader(
-            dataset=_concat_data_splits(splits=cfg.training.eval_splits),
+            dataset=_concat_data_splits(splits=cfg.data.eval_splits),
             batch_size=cfg.training.batch_size,
             shuffle=True,
             drop_last=False,

@@ -63,6 +63,7 @@ class SSJEPATrainer(
                     v2.RandomResizedCrop(
                         size=(128, 128), antialias=True, scale=(0.333, 1.00)
                     ),
+                    v2.GaussianNoise(),
                 ]
             )
 

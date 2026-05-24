@@ -19,7 +19,7 @@ class SegmentationModelWithPretainedEncoder(torch.nn.Module):
         self._backbone = backbone
 
         # Freeze backbone encoder
-        self._backbone.freeze_encoder()
+        # self._backbone.freeze_encoder()
 
         # Register the encoder
         self._register_encoder()
