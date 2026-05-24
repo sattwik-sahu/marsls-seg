@@ -9,7 +9,11 @@ defaults:
 data:
   root_dir: "data/marsls-seg/mmlsv2"
   params_file: "data/configs/mmls_norm.yaml"
-  eval_split: test
+  train_splits:
+    - train
+    - val
+  eval_splits:
+    - test
 
 training:
   batch_size: 8

@@ -1,4 +1,4 @@
 _target_: marsls_seg.utils.modules.segmentation.wrappers.IJEPA_SMP_Backbone
 
-jepa_ckpt_path: data/runs/ms-jepa/20260520-125410/ckpt_ep_500.pt
-jepa_config_path: data/runs/ms-jepa/20260520-125410/config.yaml
+jepa_ckpt_path: data/runs/ms-jepa/ijepa-128/ckpt_ep_500.pt
+jepa_config_path: data/runs/ms-jepa/ijepa-128/config.yaml

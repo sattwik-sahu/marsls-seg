@@ -35,6 +35,7 @@ class SSJEPATrainer(
         n_epochs: int,
         n_warmup_epochs: int,
         wandb: WandbRun,
+        apply_aug: bool,
         device: torch.device,
     ) -> None:
         super().__init__(
@@ -51,14 +52,17 @@ class SSJEPATrainer(
             num_training_steps=self._n_epochs,
         )
 
-        self._augmentation = v2.Compose(
-            [
-                v2.RandomHorizontalFlip(p=0.5),
-                v2.RandomVerticalFlip(p=0.5),
-                v2.RandomRotation(degrees=[-90, 90]),
-                v2.RandomResizedCrop(size=(128, 128), antialias=True),
-            ]
-        )
+        self._apply_aug: bool = apply_aug
+
+        if self._apply_aug:
+            self._augmentation = v2.Compose(
+                [
+                    v2.RandomHorizontalFlip(p=0.5),
+                    v2.RandomVerticalFlip(p=0.5),
+                    v2.RandomRotation(degrees=[-90, 90]),
+                    v2.RandomResizedCrop(size=(128, 128), antialias=True, scale=(0.25, )),
+                ]
+            )
 
     def _create_x_y_z(
         self,
@@ -69,7 +73,8 @@ class SSJEPATrainer(
     ) -> tuple[SSViTInput, SSViTInput, torch.Tensor]:
         """Creates the context(x), target(y) and Query (z) tensors"""
         image = batch.merge_channels()  # (B, 7, 128, 128)
-        if self._model.training:
+
+        if self._apply_aug:
             image = self._augmentation(image)
 
         # Input Image + indices of set of visible patches
@@ -78,12 +83,11 @@ class SSJEPATrainer(
         # Full image for the target encoder
         y = SSViTInput(image=image).to(device=device)
 
-        # This is our query
+        # Get the full pos emb (spatial+spectral)
         z_full = self._model.context_encoder.get_full_pos_embed
 
-        z = construct_latent(
-            z_full=z_full, ids=ids_drop, batch_size=batch.batch_size[0]
-        )
+        # Extract the pos embs for masked tokens and add batch dim
+        z = z_full[ids_drop].unsqueeze(0)
 
         return x, y, z
 
