@@ -62,6 +62,7 @@ class SpatioSpectralVisionTransformer(BaseImagePatchEncoder[SSViTInput]):
         """
         Creates the full positional embedding for all tokens
         by combining the spatial and channel embeddings.
+        Shape: (n_channels * n_patches, dim)
         """
         combined = self._spectral_embeddings.unsqueeze(
             1

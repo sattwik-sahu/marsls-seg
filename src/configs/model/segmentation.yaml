@@ -4,3 +4,4 @@ defaults:
 _target_: marsls_seg.utils.modules.segmentation.model.SegmentationModelWithPretainedEncoder
 
 arch: unet
+freeze_backbone: true

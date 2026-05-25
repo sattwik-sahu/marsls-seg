@@ -67,6 +67,10 @@ class MultimodalMartianLandslideDataset(
         self._image_paths: list[str] = glob(image_path_pattern)
         self._label_paths: list[str] = glob(label_path_pattern)
 
+        # Sort the paths to preserve ordering in dataloaders
+        self._image_paths.sort()
+        self._label_paths.sort()
+
         # Labels exist? (Might not exist for certain versions in which test split has no labels)
         self._labels_exist: bool = len(self._label_paths) > 0
 

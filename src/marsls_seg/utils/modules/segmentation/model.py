@@ -11,7 +11,9 @@ class SegmentationModelWithPretainedEncoder(torch.nn.Module):
 
     _CUSTOM_ENCODER_KEY: str = "marsls_jepa_encoder"
 
-    def __init__(self, arch: str, backbone: Base_SMP_EncoderBackbone) -> None:
+    def __init__(
+        self, arch: str, backbone: Base_SMP_EncoderBackbone, freeze_backbone: bool
+    ) -> None:
         super().__init__()
 
         # The architecture of the segmentation head
@@ -19,7 +21,8 @@ class SegmentationModelWithPretainedEncoder(torch.nn.Module):
         self._backbone = backbone
 
         # Freeze backbone encoder
-        self._backbone.freeze_encoder()
+        if freeze_backbone:
+            self._backbone.freeze_encoder()
 
         # Register the encoder
         self._register_encoder()

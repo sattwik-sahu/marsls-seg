@@ -1,6 +1,5 @@
-_target_: marsls_seg.utils.modules.segmentation.wrappers.IJEPA_SMP_Backbone
+_target_: marsls_seg.utils.modules.segmentation.wrappers.SSJEPA_SMP_Backbone
 
-# TODO Fill in paths
-encoder_ckpt_path: ...
-encoder_config_path: ...
-fusion_mlp_hidden_size: 2048
+jepa_ckpt_path: data/ckpts/20260524-134501/ckpt_ep_150.pt
+jepa_config_path: data/ckpts/20260524-134501/config.yaml
+fusion_mlp_hidden_size: 3072

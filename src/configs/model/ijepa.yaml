@@ -1,5 +1,5 @@
 _target_: marsls_seg.utils.modules.ijepa.IJEPA
-sigreg_lambda: 0.02
+sigreg_lambda: 0.3
 
 encoder:
   _target_: marsls_seg.utils.modules.ijepa.IJEPAEncoder

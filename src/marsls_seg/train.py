@@ -30,8 +30,11 @@ from marsls_seg.helpers.timestamp import get_timestamp_now
 from marsls_seg.utils.data.mmls import (
     MultimodalMartianLandslideDataset,
     MultimodalMartianLandslideSample,
+    SplitName,
 )
-from marsls_seg.utils.data.processing import ProcessedMMLSv2Dataset
+from marsls_seg.utils.data.processing import (
+    ProcessedMMLSv2Dataset,
+)
 from marsls_seg.utils.train.base import BaseTrainer
 
 
@@ -57,26 +60,30 @@ def main(cfg: DictConfig) -> None:
     # Initialize datasets
     data_root_dir: Path = Path(cfg.data.root_dir)
     data_params_file: Path = Path(cfg.data.params_file)
-    train_data: ProcessedMMLSv2Dataset = ProcessedMMLSv2Dataset(
-        dataset=MultimodalMartianLandslideDataset(
-            data_root=data_root_dir, split="train"
-        ),
-        params_file=data_params_file,
-    )
-    val_data: ProcessedMMLSv2Dataset = ProcessedMMLSv2Dataset(
-        dataset=MultimodalMartianLandslideDataset(
-            data_root=data_root_dir, split=cfg.data.eval_split
-        ),
-        params_file=data_params_file,
-    )
 
-    # Create dataloader
+    def _concat_data_splits(
+        splits: list[SplitName],
+    ) -> torch.utils.data.Dataset[MultimodalMartianLandslideSample]:
+        train_data = torch.utils.data.ConcatDataset[MultimodalMartianLandslideSample](
+            datasets=[
+                ProcessedMMLSv2Dataset(
+                    dataset=MultimodalMartianLandslideDataset(
+                        data_root=data_root_dir, split=split
+                    ),
+                    params_file=data_params_file,
+                )
+                for split in splits
+            ]
+        )
+        return train_data
+
+    # Create dataloaders by concatenating the train and eval splits from config
     train_loader: torch.utils.data.DataLoader[MultimodalMartianLandslideSample] = (
         torch.utils.data.DataLoader(
-            dataset=train_data,
+            dataset=_concat_data_splits(splits=cfg.data.train_splits),
             batch_size=cfg.training.batch_size,
             shuffle=True,
-            drop_last=True,
+            drop_last=False,
             num_workers=cfg.training.num_workers,
             pin_memory=cfg.training.pin_memory,
             collate_fn=torch.stack,
@@ -84,10 +91,10 @@ def main(cfg: DictConfig) -> None:
     )
     val_loader: torch.utils.data.DataLoader[MultimodalMartianLandslideSample] = (
         torch.utils.data.DataLoader(
-            dataset=val_data,
+            dataset=_concat_data_splits(splits=cfg.data.eval_splits),
             batch_size=cfg.training.batch_size,
             shuffle=True,
-            drop_last=True,
+            drop_last=False,
             num_workers=cfg.training.num_workers,
             pin_memory=cfg.training.pin_memory,
             collate_fn=torch.stack,

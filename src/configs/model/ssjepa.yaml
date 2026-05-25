@@ -1,15 +1,15 @@
 _target_: marsls_seg.utils.modules.ssjepa.jepa.SpatioSpectralJEPA
-sigreg_lambda: 0.02
+sigreg_lambda: 0.3
 
 encoder:
   _target_: marsls_seg.utils.modules.encoder.spatio_spectral_vit.SpatioSpectralVisionTransformer
   dim: 256
   patch_size: 8
-  n_heads: 4
+  n_heads: 8
   n_layers: 8
   img_size: 128
   n_channels: 7
-  n_groups: null
+  n_groups: 4
 
 predictor:
   _target_: marsls_seg.utils.modules.jepa.extras.SimpleTransformerDecoderPredictor
