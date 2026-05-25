@@ -202,8 +202,7 @@ class SegmentationTrainer(
 
     def _visualize_and_log(
         self,
-        image: torch.Tensor,
-        label: torch.Tensor,
+        batch: MultimodalMartianLandslideSample,
         logits: torch.Tensor,
         epoch: int,
         num_samples: int = 5,
@@ -212,12 +211,12 @@ class SegmentationTrainer(
         Creates a high-res grid of multispectral inputs, GT, and Preds for WandB/Paper.
         """
         # Ensure we don't try to plot more than what's in the batch
-        num_samples = min(num_samples, image.shape[0])
-        indices = torch.randperm(image.shape[0])[:num_samples]
+        num_samples = min(num_samples, batch.batch_size[0])
+        indices = torch.arange(num_samples)
 
         # Move to CPU and float32 for plotting
-        images = image[indices].detach().cpu().float().numpy()
-        labels = label[indices].detach().cpu().float().numpy()
+        # images = image[indices].detach().cpu().float().numpy()
+        labels = batch.label[indices].detach().cpu().float().numpy()
         preds = (torch.sigmoid(logits[indices]) > 0.5).detach().cpu().float().numpy()
 
         cols = 7  # RGB, Gray, DEM, Slope, Thermal, GT, Prediction
@@ -226,22 +225,27 @@ class SegmentationTrainer(
 
         # Titles for the columns (Placeholders for your specific names)
         titles = [
-            "RGB (Visible)",
-            "Panchromatic",
+            "RGB",
+            "Grayscale",
             "DEM",
             "Slope",
-            "Thermal",
+            "Thermal-Inertial",
             "Ground Truth",
-            "Mars-JEPA Pred",
+            "Prediction",
         ]
 
         for r in range(rows):
             # Extract channels based on your provided slices
-            img_rgb = images[r, 0:3].transpose(1, 2, 0)
-            img_dem = images[r, 3:4].squeeze()
-            img_slope = images[r, 4:5].squeeze()
-            img_thermal = images[r, 5:6].squeeze()
-            img_gray = images[r, 6:7].squeeze()
+            # img_rgb = images[r, 0:3].transpose(1, 2, 0)
+            # img_dem = images[r, 3:4].squeeze()
+            # img_slope = images[r, 4:5].squeeze()
+            # img_thermal = images[r, 5:6].squeeze()
+            # img_gray = images[r, 6:7].squeeze()
+            img_rgb = batch.rgb[r].detach().cpu().permute(1, 2, 0).numpy()
+            img_dem = batch.dem[r].detach().cpu().squeeze()
+            img_slope = batch.slope[r].detach().cpu().squeeze()
+            img_thermal = batch.thermal_inertial[r].detach().cpu().squeeze()
+            img_gray = batch.grayscale[r].detach().cpu().squeeze()
             gt = labels[r].squeeze()
             pred = preds[r].squeeze()
 
@@ -335,7 +339,7 @@ class SegmentationTrainer(
 
                 # Store the first batch of the validation set for visualization
                 if i == 0:
-                    viz_data = (image, label, logits)
+                    viz_data = (batch, logits)
 
         # Trigger Visualization
         if viz_data is not None:
