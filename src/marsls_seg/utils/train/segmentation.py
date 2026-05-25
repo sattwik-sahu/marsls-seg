@@ -1,14 +1,14 @@
 from typing import override
 
-from matplotlib import pyplot as plt
 import segmentation_models_pytorch as smp
 import torch
 import torch.nn.functional as F
 import torch.optim as optim
+from matplotlib import pyplot as plt
 from torchvision.transforms import InterpolationMode, v2
 from transformers import get_cosine_schedule_with_warmup
-import wandb
 
+import wandb
 from marsls_seg.utils.data._typing import MultimodalMartianLandslideSample
 from marsls_seg.utils.modules.segmentation.model import (
     SegmentationModelWithPretainedEncoder,
