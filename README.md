@@ -10,9 +10,9 @@
 - Aditya Sinha [[@techaadii](https://github.com/techaadii)]
 - Prof. Sujit P B [[@pbsujit](https://github.com/pbsujit)]
 
-## :newspaper: News
+<!-- ## :newspaper: News
 
-- [2025-05-31] Mars-JEPA has been submitted to BMVC 2026
+- [2025-05-31] Mars-JEPA has been submitted to BMVC 2026 -->
 
 ---
 
