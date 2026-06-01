@@ -1,4 +1,8 @@
+![Mars-JEPA banner](assets/banner.png)
+
 # Mars-JEPA: Multispectral Joint Embedding Predictive Architecture for Martian Landslide Segmentation
+
+![SS-JEPA Architecture Overview](assets/ssjepa.svg)
 
 ## :construction_worker: Authors
 
