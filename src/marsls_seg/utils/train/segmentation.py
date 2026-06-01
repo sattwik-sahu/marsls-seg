@@ -338,14 +338,14 @@ class SegmentationTrainer(
                 all_metrics.append(metrics)
 
                 # Store the first batch of the validation set for visualization
-                if i == 0:
-                    viz_data = (batch, logits)
+                # if i == 0:
+                #     viz_data = (batch, logits)
 
         # Trigger Visualization
-        if viz_data is not None:
-            # We use a placeholder for epoch, you might want to pass it into evaluate()
-            current_epoch = self._lr_scheduler.last_epoch
-            self._visualize_and_log(*viz_data, epoch=current_epoch)
+        # if viz_data is not None:
+        #     # We use a placeholder for epoch, you might want to pass it into evaluate()
+        #     current_epoch = self._lr_scheduler.last_epoch
+        #     self._visualize_and_log(*viz_data, epoch=current_epoch)
 
         avg_metrics = tuple(
             sum(m[i] for m in all_metrics) / len(all_metrics)
