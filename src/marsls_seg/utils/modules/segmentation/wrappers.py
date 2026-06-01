@@ -43,14 +43,17 @@ class SSJEPA_SMP_Backbone(
         jepa_ckpt_path: str | Path,
         jepa_config_path: str | Path,
         fusion_mlp_hidden_size: int,
+        active_channel_inxs: list[int] | None = None,
         **kwargs,
     ) -> None:
         super().__init__(jepa_ckpt_path, jepa_config_path, **kwargs)
 
+        self._active_channel_inxs: list[int] = active_channel_inxs or list(range(7))
+
         # Create fusion module
         self._fusion: torch.nn.Sequential = torch.nn.Sequential(
             torch.nn.Linear(
-                in_features=self._encoder._dim * self._encoder._n_channels,
+                in_features=self._encoder._dim * len(self._active_channel_inxs),
                 out_features=fusion_mlp_hidden_size,
             ),
             torch.nn.SiLU(),
@@ -66,11 +69,17 @@ class SSJEPA_SMP_Backbone(
     @override
     def _convert_to_feature_map(self, encoding: torch.Tensor) -> FeatureMap:
         # Concatenate channel features along last dimension
-        concatenated_features: torch.Tensor = rearrange(
+        features: torch.Tensor = rearrange(
             encoding,
-            "b (nc np) d -> b np (nc d)",
+            "b (nc np) d -> b np nc d",
             nc=self._encoder.n_channels,
             np=self._encoder.n_patches,
+        )
+        active_channel_features: torch.Tensor = features[
+            :, :, self._active_channel_inxs, :
+        ]
+        concatenated_features: torch.Tensor = rearrange(
+            active_channel_features, "b np na d -> b np (na d)"
         )
 
         # Fuse features using fusion layer

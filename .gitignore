@@ -186,3 +186,5 @@ pyrightconfig.json
 
 # Ignore tests
 /tests/
+
+/*.pdf
