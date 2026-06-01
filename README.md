@@ -43,7 +43,7 @@ uv sync --all-groups
 2. Get the normalization parameters file from [here](https://gist.github.com/sattwik-sahu/f1cc4d528be1df6226630e7a02fd842f)
 3. Create a directory where you want the trained models' configs and weights to be stored as `$CKPT_DIR`
 
-> Henceforth the dataset was extracted to `$DATA_ROOT` and the normalization parameters file was downloaded to `$PARAMS_FILE`.
+> We assume the dataset was extracted to `$DATA_ROOT` and the normalization parameters file was downloaded to `$PARAMS_FILE`.
 
 ## Usage
 
