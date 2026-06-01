@@ -1,10 +1,14 @@
 # Mars-JEPA: Multispectral Joint Embedding Predictive Architecture for Martian Landslide Segmentation
 
-## Authors:
+## :construction_worker: Authors
 
 - Sattwik Sahu [[@sattwik-sahu](https://github.com/sattwik-sahu/)]
 - Aditya Sinha [[@techaadii](https://github.com/techaadii)]
 - Prof. Sujit P B [[@pbsujit](https://github.com/pbsujit)]
+
+## :newspaper: News
+
+- [2025-05-31] Mars-JEPA has been submitted to BMVC 2026
 
 ---
 
@@ -24,7 +28,7 @@ uv add git+https://github.com/sattwik-sahu/marsls-seg
 
 ### From Source
 
-> ![NOTE]
+> [!NOTE]
 > This installation mode requires [`uv` to be installed](https://docs.astral.sh/uv/getting-started/installation/), as the project dependencies are managed by `uv`.
 
 ```bash
@@ -97,7 +101,7 @@ marsls-train -m model=segmentation trainer=segmentation \
   wandb.run_name='${hydra:runtime.choices.model/backbone}-${model.arch}'
 ```
 
-> ![NOTE]
+> [!NOTE]
 > - The architectures used for `model.arch` above are from the [Segmentation Models Pytorch](https://smp.readthedocs.io/en/latest/index.html) package
 > - If you run into CUDA OOM errors, try reducing the batch size
 > - Extended configuration for more advanced options in the config will be released soon... :wink:
