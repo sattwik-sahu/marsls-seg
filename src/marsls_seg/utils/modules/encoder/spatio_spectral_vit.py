@@ -14,6 +14,32 @@ class SSViTInput(TensorClass):
     """(M) Indices of Visible tokens in the range of (0,num_patches*7)"""
 
 
+class BatchNormOutputProjection(torch.nn.Module):
+    """Output projection MLP with Batch norm before hidden layer."""
+
+    def __init__(self, dim: int, dim_hidden: int = 2048) -> None:
+        super().__init__()
+
+        self._dim: int = dim
+        self._dim_hidden: int = dim_hidden
+        self._layer1 = torch.nn.Linear(
+            in_features=self._dim, out_features=self._dim_hidden
+        )
+        self._batch_norm = torch.nn.BatchNorm1d(num_features=self._dim_hidden)
+        self._act = torch.nn.SiLU()
+        self._layer2 = torch.nn.Linear(
+            in_features=self._dim_hidden, out_features=self._dim
+        )
+
+    @override
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        x = self._layer1(x)
+        x = self._batch_norm(rearrange(x, "b s d -> b d s"))
+        x = self._act(rearrange(x, "b d s -> b s d"))
+        x = self._layer2(x)
+        return x
+
+
 class SpatioSpectralVisionTransformer(BaseImagePatchEncoder[SSViTInput]):
     """
     Vision transformer that tokenizes channels seperately and
@@ -52,6 +78,8 @@ class SpatioSpectralVisionTransformer(BaseImagePatchEncoder[SSViTInput]):
         self.encoder = TransformerEncoder(
             n_layers=n_layers, n_heads=n_heads, dim=dim, n_groups=n_groups
         )
+
+        self._output_proj = BatchNormOutputProjection(dim=self._dim)
 
     @property
     def total_tokens(self) -> int:
@@ -98,4 +126,7 @@ class SpatioSpectralVisionTransformer(BaseImagePatchEncoder[SSViTInput]):
         if isinstance(x, SSViTInput) and x.mask.numel() > 0:
             tokens = tokens[:, x.mask]
 
-        return self.encoder(tokens)
+        encodings: torch.Tensor = self.encoder(tokens)
+        output: torch.Tensor = self._output_proj(encodings)
+
+        return output

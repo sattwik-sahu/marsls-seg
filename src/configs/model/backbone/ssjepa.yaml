@@ -1,7 +1,7 @@
 _target_: marsls_seg.utils.modules.segmentation.wrappers.SSJEPA_SMP_Backbone
 
-jepa_ckpt_path: data/ckpts/special/ssjepa128-ft/ckpt_ep_200.pt
-jepa_config_path: data/ckpts/special/ssjepa128-ft/config.yaml
+jepa_ckpt_path: data/ckpts/20260606-132301/ckpt_ep_240.pt
+jepa_config_path: data/ckpts/20260606-132301/config.yaml
 fusion_mlp_hidden_size: 3072
 # active_channel_inxs: [2, 3, 4] # RGB
 # active_channel_inxs: [1, 2, 3, 4] # RGB + Gray

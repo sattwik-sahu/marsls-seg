@@ -1,5 +1,5 @@
 _target_: marsls_seg.utils.modules.ssjepa.jepa.SpatioSpectralJEPA
-sigreg_lambda: 0.3
+sigreg_lambda: 0.1
 
 encoder:
   _target_: marsls_seg.utils.modules.encoder.spatio_spectral_vit.SpatioSpectralVisionTransformer

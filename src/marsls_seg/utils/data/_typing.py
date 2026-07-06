@@ -3,9 +3,6 @@ from typing import Literal
 import torch
 from tensordict import TensorClass
 
-from dataclasses import dataclass
-from typing import Self
-
 
 class MultimodalMartianLandslideSample(TensorClass):
     """
@@ -31,7 +28,7 @@ class MultimodalMartianLandslideSample(TensorClass):
     """
     The segmentation mask. Set to `torch.empty()` if
     no label is available for the sample.
-    Shape: `(1, 128, 128)`
+    Shape: `(128, 128)`
     """
 
     def merge_channels(self) -> torch.Tensor:
