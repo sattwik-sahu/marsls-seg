@@ -36,6 +36,8 @@ from marsls_seg.utils.data.processing import (
     ProcessedMMLSv2Dataset,
 )
 from marsls_seg.utils.train.base import BaseTrainer
+import random
+import numpy as np
 
 
 @hydra.main(version_base=None, config_path="../configs", config_name="config")
@@ -45,6 +47,12 @@ def main(cfg: DictConfig) -> None:
 
     # Create the rich console
     console: Console = Console()
+
+    # Initialize random seed
+    if cfg.seed is not None:
+        torch.manual_seed(seed=cfg.seed)
+        random.seed(cfg.seed)
+        np.random.seed(seed=cfg.seed)
 
     # Initialize wandb
     run_name: str = cfg.wandb.run_name or f"run-{timestamp}"
