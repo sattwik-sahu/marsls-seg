@@ -1,0 +1,45 @@
+defaults:
+  - model: vit_seg
+  - override hydra/launcher: joblib
+  - _self_
+
+seed: 42
+
+# --- hardware / precision (tuned for a single L40S) ---
+accelerator: gpu
+devices: 1
+precision: bf16-mixed # L40S has native bf16 tensor cores
+
+# Name of a Lightning AI teamspace to attach LitLogger runs to, so
+# teammates can see the charts too. Leave null to log to your personal
+# workspace only.
+teamspace: null
+
+# --- data ---
+batch_size: 32
+num_workers: 8
+# Point this at persistent storage on Lightning AI Studios so the HF dataset
+# isn't re-downloaded on every restart, e.g.:
+#   /teamspace/studios/this_studio/.cache/huggingface
+hf_cache_dir: ${oc.env:HF_CACHE_DIR,null}
+
+# --- training ---
+n_epochs: 70
+n_grad_accum_batches: 2
+ckpt_interval: 5
+# Also point these at persistent storage on Lightning AI Studios, e.g.
+#   /teamspace/studios/this_studio/checkpoints
+ckpt_dir: ${oc.env:CKPT_DIR,./checkpoints}
+
+hydra:
+  # Every multirun leg (one per decoder_arch) gets its own subdir.
+  sweep:
+    dir: multirun/${now:%Y-%m-%d}/${now:%H-%M-%S}
+    subdir: ${model.decoder_arch}
+  run:
+    dir: outputs/${now:%Y-%m-%d}/${now:%H-%M-%S}
+  launcher:
+    # A single L40S can only run one training job at a time without the jobs
+    # fighting over GPU memory, so keep this at 1 unless you deliberately
+    # want to interleave several small models on the same card.
+    n_jobs: 2

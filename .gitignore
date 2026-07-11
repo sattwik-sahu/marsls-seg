@@ -179,6 +179,7 @@ pyrightconfig.json
 /notebooks/
 /.vscode/
 /wandb/
+/checkpoints/
 
 # Hydra output folders
 /outputs/

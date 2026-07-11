@@ -1,4 +1,5 @@
 from pathlib import Path
+import warnings
 
 import hydra
 import torch
@@ -44,8 +45,20 @@ def load_model_from_ckpt[TModel: torch.nn.Module](
     # Instantiate the model with hydra
     model: TModel = hydra.utils.instantiate(config=model_cfg)
 
-    # Load the weights and states into the model
+    # Load the weights and states into the model.
+    # Some historical checkpoints were saved before a newer projection head
+    # was added to the encoder; keep the loader backward-compatible by
+    # allowing missing keys instead of hard-failing on the old snapshot.
     ckpt_state_dict = torch.load(ckpt_path, weights_only=True)
-    model.load_state_dict(ckpt_state_dict)
+    incompatible = model.load_state_dict(ckpt_state_dict, strict=False)
+
+    if incompatible.missing_keys or incompatible.unexpected_keys:
+        warnings.warn(
+            "Loaded checkpoint with missing/unexpected keys; this is expected "
+            "for some legacy checkpoints and the loader is proceeding with "
+            "strict=False.",
+            RuntimeWarning,
+            stacklevel=2,
+        )
 
     return model

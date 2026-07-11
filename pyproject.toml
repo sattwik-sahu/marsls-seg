@@ -42,6 +42,7 @@ train = [
 ]
 plot = [
     "fvcore>=0.1.5.post20221221",
+    "litlogger>=2026.6.25",
     "matplotlib>=3.10.8",
     "plotly>=6.7.0",
     "ptflops>=0.7.5",

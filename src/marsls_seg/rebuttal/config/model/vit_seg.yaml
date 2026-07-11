@@ -1,0 +1,19 @@
+_target_: marsls_seg.rebuttal.train_vit.ViTSegmentationModel
+
+dim: 128 # ViT hidden dim; also feeds ViTEncoder's deep feature channels
+decoder_arch: unet # overridden per-leg in the multirun sweep, see command below
+lr: 1e-4
+weight_decay: 5e-2
+
+vit:
+  _target_: vit_pytorch.ViT
+  image_size: 128
+  patch_size: 8
+  num_classes: 1 # unused (we hook the transformer output), required by vit_pytorch
+  dim: ${model.dim}
+  depth: 12
+  heads: 8
+  mlp_dim: 2048
+  channels: 7 # rgb(3) + grayscale(1) + dem(1) + slope(1) + thermal_inertial(1)
+  dropout: 0.1
+  emb_dropout: 0.1
